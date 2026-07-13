@@ -16,7 +16,7 @@ def scrape_mercadoLivre(product_name):
         print(f"DEBUG: Encontrei {len(items)} itens no Mercado Livre")
         products = []
 
-        for item in items[:30]:
+        for item in items[:50]:
             # O título agora costuma estar em h2 ou a com classe poly
             title_tag = item.find("a", class_="poly-component__title") or item.find("h2")
             price_container = item.find("span", class_="andes-money-amount")

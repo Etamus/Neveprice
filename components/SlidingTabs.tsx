@@ -4,11 +4,11 @@ import {
   ChevronUp,
   ExternalLink,
   ImageIcon,
-  LayoutDashboard,
-  List,
   ShoppingBag,
+  Store,
   TrendingDown,
   TrendingUp,
+  Trophy,
 } from "lucide-react";
 import type { ComparisonRow, Product } from "../models/product.model";
 import { PriceChart } from "./PriceChart";
@@ -58,17 +58,57 @@ const STORE_WORDS = new Set([
   "meli",
   "shopee",
 ]);
+const ACCESSORY_TERMS = new Set([
+  "adaptador",
+  "adesivo",
+  "borracha",
+  "bolsa",
+  "cabo",
+  "capa",
+  "carregador",
+  "case",
+  "controle",
+  "estojo",
+  "filtro",
+  "fonte",
+  "gaveta",
+  "grade",
+  "kit",
+  "pelicula",
+  "peca",
+  "pecas",
+  "prateleira",
+  "refil",
+  "suporte",
+  "vidro",
+]);
+const KNOWN_BRANDS = new Set([
+  "apple",
+  "brastemp",
+  "consul",
+  "continental",
+  "electrolux",
+  "elgin",
+  "fast",
+  "fischer",
+  "hisense",
+  "hq",
+  "lg",
+  "midea",
+  "panasonic",
+  "philco",
+  "samsung",
+  "shop",
+]);
 const navigationTabs = [
-  { label: "Lista", icon: List },
-  { label: "Cards", icon: ImageIcon },
-  { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Ranking", icon: Trophy },
+  { label: "Marketplace", icon: Store },
 ];
-type SortOrder = "price_asc" | "price_desc" | "stores_asc" | "stores_desc";
+type SortOrder = "price_asc" | "price_desc" | "stores_desc";
 
 const SORT_OPTIONS: Array<{ label: string; value: SortOrder }> = [
   { label: "Menor preço", value: "price_asc" },
   { label: "Maior preço", value: "price_desc" },
-  { label: "Menos lojas", value: "stores_asc" },
   { label: "Mais lojas", value: "stores_desc" },
 ];
 
@@ -102,6 +142,7 @@ const normalizeText = (value?: string | null) =>
 
 const normalizeProductUnits = (name: string) =>
   normalizeText(name)
+    .replace(/frostfree/g, "frost free")
     .replace(/(\d+)\s*(btus?|btu)\b/g, "$1btu")
     .replace(/(\d+)\s*(litros?|lts?|lt|l)\b/g, "$1l")
     .replace(/(\d+)\s*(volts?|volt|v)\b/g, "$1v")
@@ -109,8 +150,8 @@ const normalizeProductUnits = (name: string) =>
     .replace(/(\d+)\s*(quilos?|kg)\b/g, "$1kg")
     .replace(/(\d+)\s*(gb|tb|ml|w)\b/g, "$1$2");
 
-const productTokens = (name: string) =>
-  new Set(
+const productTokens = (name: string) => {
+  const tokens = new Set(
     normalizeProductUnits(name)
       .match(/[a-z0-9]+/g)
       ?.filter(
@@ -121,17 +162,74 @@ const productTokens = (name: string) =>
       ) || [],
   );
 
+  if (tokens.has("geladeira")) {
+    tokens.add("refrigerador");
+  }
+  if (tokens.has("refrigerador")) {
+    tokens.add("geladeira");
+  }
+  if (tokens.has("geladeiras")) {
+    tokens.add("geladeira");
+    tokens.add("refrigerador");
+  }
+  if (tokens.has("refrigeradores")) {
+    tokens.add("geladeira");
+    tokens.add("refrigerador");
+  }
+
+  return tokens;
+};
+
 const specTokens = (tokens: Set<string>) =>
   new Set([...tokens].filter((token) => /\d/.test(token)));
+
+const brandTokens = (tokens: Set<string>) =>
+  new Set([...tokens].filter((token) => KNOWN_BRANDS.has(token)));
+
+const modelTokens = (tokens: Set<string>) =>
+  new Set([...tokens].filter((token) => /[a-z]+\d|\d+[a-z]+/.test(token)));
+
+const hasAccessoryToken = (tokens: Set<string>) =>
+  [...tokens].some((token) => ACCESSORY_TERMS.has(token));
 
 const sameProduct = (clusterTokens: Set<string>, itemTokens: Set<string>) => {
   if (clusterTokens.size === 0 || itemTokens.size === 0) {
     return false;
   }
 
+  if (hasAccessoryToken(clusterTokens) !== hasAccessoryToken(itemTokens)) {
+    return false;
+  }
+
+  const clusterBrands = brandTokens(clusterTokens);
+  const itemBrands = brandTokens(itemTokens);
+  if (
+    clusterBrands.size > 0 &&
+    itemBrands.size > 0 &&
+    ![...clusterBrands].some((token) => itemBrands.has(token))
+  ) {
+    return false;
+  }
+
+  const clusterModels = modelTokens(clusterTokens);
+  const itemModels = modelTokens(itemTokens);
+  if (
+    clusterModels.size > 0 &&
+    itemModels.size > 0 &&
+    ![...clusterModels].some((token) => itemModels.has(token))
+  ) {
+    return false;
+  }
+
   const clusterSpecs = specTokens(clusterTokens);
   const itemSpecs = specTokens(itemTokens);
   const bothHaveSpecs = clusterSpecs.size > 0 && itemSpecs.size > 0;
+  if (
+    bothHaveSpecs &&
+    ![...clusterSpecs].some((token) => itemSpecs.has(token))
+  ) {
+    return false;
+  }
 
   const shared = [...clusterTokens].filter((token) => itemTokens.has(token));
   const sharedNumbers = shared.filter((token) => /\d/.test(token));
@@ -243,6 +341,14 @@ const formatSignedCurrency = (value: number) => {
 const formatPercent = (value: number) =>
   `${Math.round(Math.abs(value || 0))}%`;
 
+const formatUnavailableStores = (count: number) =>
+  `${count} ${count === 1 ? "loja" : "lojas"} sem disponibilidade`;
+
+const rowToneClass = (row: ComparisonRow) =>
+  Math.abs(row.difference_value) < 100
+    ? "bg-emerald-700 hover:bg-emerald-800"
+    : "bg-red-600 hover:bg-red-700";
+
 const buildRowFromOffers = (
   offers: Product[],
   id: number,
@@ -316,14 +422,6 @@ const sortRows = (rows: ComparisonRow[], sortOrder: SortOrder) =>
       return b.cheapest_price - a.cheapest_price;
     }
 
-    if (sortOrder === "stores_asc") {
-      return (
-        a.store_count - b.store_count ||
-        a.cheapest_price - b.cheapest_price ||
-        a.name.localeCompare(b.name)
-      );
-    }
-
     return (
       b.store_count - a.store_count ||
       b.offer_count - a.offer_count ||
@@ -346,14 +444,48 @@ const sortProducts = (products: Product[], sortOrder: SortOrder) => {
 
 const TableHeader = () => (
   <thead>
-    <tr className="bg-slate-200 text-left text-xs font-semibold text-slate-700">
-      <th className="w-[44%] px-6 py-4">Produto</th>
+    <tr className="bg-neutral-800 text-left text-xs font-semibold text-white">
+      <th className="w-[40%] px-6 py-4">Produto</th>
       <th className="w-[10%] px-5 py-4 text-center">Lojas</th>
       <th className="w-[14%] px-5 py-4 text-right">Preço sugerido</th>
       <th className="w-[14%] px-5 py-4 text-center">Mais barato</th>
       <th className="w-[18%] px-5 py-4 text-center">Diferença</th>
+      <th className="sticky right-0 z-20 w-[72px] bg-neutral-800 px-4 py-4" />
     </tr>
   </thead>
+);
+
+const EyeIcon = () => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    height="28"
+    style={{
+      color: "#000000",
+      display: "block",
+      opacity: 1,
+      visibility: "visible",
+    }}
+    viewBox="0 0 24 24"
+    width="28"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
+      stroke="#000000"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.4"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      fill="#000000"
+      stroke="#000000"
+      strokeWidth="2"
+    />
+  </svg>
 );
 
 const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
@@ -369,18 +501,11 @@ const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
 
 const DifferenceBadge = ({ row }: { row: ComparisonRow }) => {
   const isNegative = row.difference_value < 0;
-  const isPositive = row.difference_value > 0;
   const Icon = isNegative ? TrendingDown : TrendingUp;
 
   return (
     <div
-      className={`inline-flex min-w-[178px] items-center justify-center gap-2 whitespace-nowrap rounded px-3 py-2 text-sm font-black leading-none text-white ${
-        isNegative
-          ? "bg-red-600"
-          : isPositive
-            ? "bg-emerald-700"
-            : "bg-slate-500"
-      }`}
+      className={`inline-flex min-w-[178px] items-center justify-center gap-2 whitespace-nowrap rounded px-3 py-2 text-sm font-black leading-none text-white ${rowToneClass(row)}`}
     >
       <span>{formatSignedCurrency(row.difference_value)}</span>
       <Icon size={16} className="shrink-0" />
@@ -403,20 +528,26 @@ export default function SlidingTabs({
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [sortOrder, setSortOrder] = useState<SortOrder>("stores_desc");
   const [sortOpen, setSortOpen] = useState(false);
+  const [dashboardRow, setDashboardRow] = useState<ComparisonRow | null>(null);
   const sortRef = useRef<HTMLDivElement>(null);
 
   const rows = useMemo(
     () =>
-      products.length > 0
-        ? buildComparisonRows(products)
-        : comparisonRows,
+      comparisonRows.length > 0
+        ? comparisonRows
+        : buildComparisonRows(products),
     [comparisonRows, products],
   );
 
   useEffect(() => {
     setSortOrder("stores_desc");
     setSortOpen(false);
+    setDashboardRow(null);
   }, [products]);
+
+  useEffect(() => {
+    setDashboardRow(null);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!sortOpen) {
@@ -440,6 +571,10 @@ export default function SlidingTabs({
   }, [sortOpen]);
 
   const filteredRows = useMemo(() => {
+    if (selectedStores.length === 0 && selectedBrands.length === 0) {
+      return sortRows(rows, sortOrder);
+    }
+
     const rowsWithFilters = rows
       .map((row) => {
         const offers = (row.offers?.length ? row.offers : [])
@@ -448,13 +583,6 @@ export default function SlidingTabs({
 
         if (offers.length > 0) {
           return rebuildRowWithOffers(row, offers);
-        }
-
-        if (
-          selectedStores.length === 0 &&
-          selectedBrands.length === 0
-        ) {
-          return row;
         }
 
         return null;
@@ -522,11 +650,7 @@ export default function SlidingTabs({
     <div className="w-full">
       <div className="flex w-full items-start gap-6 pl-5 text-left">
         <aside className="w-72 shrink-0 px-1">
-          <div className="px-3 pb-3">
-            <h2 className="text-xl font-extrabold tracking-[-0.01em] text-black">
-              Filtros
-            </h2>
-          </div>
+          <div className="h-8 px-3 pb-3" />
 
           <div className="space-y-3 px-3">
             <section>
@@ -603,7 +727,7 @@ export default function SlidingTabs({
               <span className="font-semibold text-black">Mostrando:</span>{" "}
               <span>{displayedOfferCount} ofertas</span>,{" "}
               <span>{displayedProductCount} produtos</span>,{" "}
-              <span>{unavailableStoreCount} loja(as) sem disponibilidade</span>
+              <span>{formatUnavailableStores(unavailableStoreCount)}</span>
             </p>
 
             <div className="flex flex-wrap items-center justify-end gap-3">
@@ -653,8 +777,8 @@ export default function SlidingTabs({
                       onClick={() => onTabChange(index)}
                       className={`flex h-10 items-center gap-2 border border-transparent px-4 py-0 text-[14px] font-semibold transition-colors ${
                         activeTab === index
-                          ? "border-neutral-300 bg-neutral-100 text-black shadow-sm"
-                          : "bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-black"
+                          ? "border-neutral-200 !bg-white text-black shadow-sm"
+                          : "bg-transparent text-neutral-600 hover:bg-white hover:text-black"
                       }`}
                     >
                       <Icon size={18} strokeWidth={2.4} className="shrink-0" />
@@ -668,6 +792,38 @@ export default function SlidingTabs({
 
           {activeTab === 0 && (
             <div className="animate-fade-in">
+              {dashboardRow ? (
+                <div className="w-full rounded-md border border-slate-200 bg-white p-5 text-slate-900">
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-500">
+                        Dashboard do item
+                      </p>
+                      <h3
+                        className="truncate text-base font-semibold text-black"
+                        title={dashboardRow.name}
+                      >
+                        {dashboardRow.name}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Voltar para lista"
+                      onClick={() => setDashboardRow(null)}
+                      className="shrink-0 border-0 !bg-transparent p-0 text-sm font-semibold text-black transition-colors hover:!bg-transparent hover:text-neutral-600"
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        padding: 0,
+                      }}
+                    >
+                      Voltar
+                    </button>
+                  </div>
+                  <PriceChart products={dashboardRow.offers} />
+                </div>
+              ) : (
+                <>
                 <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-slate-900">
                   <div className="w-full overflow-x-auto">
                     <table className="w-full min-w-[1260px] table-fixed border-separate border-spacing-0">
@@ -681,9 +837,9 @@ export default function SlidingTabs({
                                 index % 2 === 0 ? "bg-white" : "bg-slate-50"
                               }
                             >
-                              <td className="w-[44%] px-6 py-4 text-left align-middle">
+                              <td className="w-[40%] px-6 py-4 text-left align-middle">
                                 <p
-                                  className="max-w-[620px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-normal leading-snug text-slate-800"
+                                  className="min-w-0 max-w-[580px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-normal leading-snug text-slate-800"
                                   title={row.name}
                                 >
                                   {truncateText(row.name)}
@@ -709,7 +865,7 @@ export default function SlidingTabs({
                                   href={row.cheapest_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex min-w-[128px] items-center justify-center gap-2 rounded bg-red-600 px-3 py-2 text-sm font-black leading-none text-white hover:bg-red-700"
+                                  className={`inline-flex min-w-[128px] items-center justify-center gap-2 rounded px-3 py-2 text-sm font-black leading-none text-white ${rowToneClass(row)}`}
                                 >
                                   {formatCurrency(row.cheapest_price)}
                                   <ExternalLink
@@ -724,12 +880,32 @@ export default function SlidingTabs({
                               <td className="whitespace-nowrap px-5 py-4 text-center align-middle">
                                 <DifferenceBadge row={row} />
                               </td>
+                              <td
+                                className={`sticky right-0 z-10 w-[72px] px-4 py-4 text-center align-middle ${
+                                  index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  aria-label="Abrir dashboard do item"
+                                  onClick={() => setDashboardRow(row)}
+                                  className="mx-auto flex h-10 w-10 items-center justify-center border-0 !bg-transparent p-0 text-black opacity-100 transition-opacity hover:!bg-transparent hover:opacity-70"
+                                  style={{
+                                    background: "transparent",
+                                    border: 0,
+                                    color: "#000000",
+                                    padding: 0,
+                                  }}
+                                >
+                                  <EyeIcon />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         ) : (
                           <tr className="bg-white">
                             <td
-                              colSpan={5}
+                              colSpan={6}
                               className="h-[360px] px-6 py-4 text-center align-middle text-base font-semibold text-black"
                             >
                               {tableMessage}
@@ -750,6 +926,8 @@ export default function SlidingTabs({
                 />
               </div>
             )}
+                </>
+              )}
             </div>
           )}
 
@@ -817,19 +995,6 @@ export default function SlidingTabs({
           </div>
           )}
 
-          {activeTab === 2 && (
-          <div className="animate-fade-in">
-            {sortedProducts.length > 0 ? (
-              <div className="w-full overflow-x-auto">
-                <PriceChart products={sortedProducts} />
-              </div>
-            ) : (
-              <p className="py-16 text-center text-black">
-                Nenhum produto disponível.
-              </p>
-            )}
-          </div>
-          )}
         </div>
       </div>
     </div>

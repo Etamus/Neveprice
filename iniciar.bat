@@ -3,13 +3,15 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
 set "BACKEND_DIR=%ROOT%backend\"
-set "FRONTEND_DIR=%ROOT%frontend\"
+set "FRONTEND_DIR=%ROOT%"
 set "PREPARE_SCRIPT=%ROOT%preparar.bat"
 set "VENV_PY=%BACKEND_DIR%.venv\Scripts\python.exe"
 set "BACKEND_URL=http://127.0.0.1:8000"
 set "FRONTEND_URL=http://127.0.0.1:5173"
 set "LOCK_DIR=%ROOT%.iniciar.lock"
 set "EXIT_CODE=0"
+set "LAUNCHED_BACKEND=0"
+set "LAUNCHED_FRONTEND=0"
 
 echo.
 echo === NevePrice: iniciar local ===
@@ -58,8 +60,9 @@ if not exist "%FRONTEND_DIR%node_modules\" (
 
 call :url_ok "%BACKEND_URL%/"
 if errorlevel 1 (
-  echo Iniciando backend em nova janela...
-  start "NevePrice Backend" /D "%BACKEND_DIR%" cmd /k ""%VENV_PY%" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+  echo Iniciando backend neste CMD...
+  start "NevePrice Backend" /B /D "%BACKEND_DIR%" cmd /c ""%VENV_PY%" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+  set "LAUNCHED_BACKEND=1"
 ) else (
   echo Backend ja esta disponivel. Nao vou iniciar outra instancia.
 )
@@ -68,15 +71,16 @@ echo Aguardando backend ficar disponivel...
 call :wait_url "%BACKEND_URL%/" 60
 if errorlevel 1 (
   echo ERRO: Backend nao respondeu em ate 60 segundos.
-  echo Verifique a janela do backend para ler a mensagem de erro.
+  echo Verifique as mensagens deste CMD para ler o erro do backend.
   set "EXIT_CODE=1"
   goto :cleanup
 )
 
 call :url_ok "%FRONTEND_URL%/"
 if errorlevel 1 (
-  echo Iniciando frontend em nova janela...
-  start "NevePrice Frontend" /D "%FRONTEND_DIR%" cmd /k "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort"
+  echo Iniciando frontend neste CMD...
+  start "NevePrice Frontend" /B /D "%FRONTEND_DIR%" cmd /c "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort"
+  set "LAUNCHED_FRONTEND=1"
 ) else (
   echo Frontend ja esta disponivel. Nao vou iniciar outra instancia.
 )
@@ -84,7 +88,7 @@ if errorlevel 1 (
 echo Aguardando frontend ficar disponivel...
 call :wait_url "%FRONTEND_URL%/" 30
 if errorlevel 1 (
-  echo AVISO: Frontend ainda nao respondeu. A janela do frontend permanecera aberta para diagnostico.
+  echo AVISO: Frontend ainda nao respondeu. Este CMD permanecera aberto para diagnostico.
 ) else (
   start "" "%FRONTEND_URL%/"
 )
@@ -93,6 +97,17 @@ echo.
 echo Enderecos locais:
 echo Backend:  %BACKEND_URL%
 echo Frontend: %FRONTEND_URL%
+
+if "%LAUNCHED_BACKEND%%LAUNCHED_FRONTEND%"=="00" goto :cleanup
+
+if exist "%LOCK_DIR%" rmdir "%LOCK_DIR%" >nul 2>nul
+echo.
+echo Backend e frontend foram iniciados neste unico CMD.
+echo Feche esta janela ou pressione Ctrl+C para encerrar os processos.
+
+:keepalive
+timeout /t 3600 /nobreak >nul
+goto :keepalive
 
 :cleanup
 if exist "%LOCK_DIR%" rmdir "%LOCK_DIR%" >nul 2>nul

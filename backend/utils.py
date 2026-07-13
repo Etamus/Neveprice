@@ -45,7 +45,7 @@ def get_random_headers():
 def fetch_marketplace_data(marketplace, product_name):
     url = build_url(marketplace, product_name)
     try:
-        response = session.get(url, headers=get_random_headers(), timeout=15)
+        response = session.get(url, headers=get_random_headers(), timeout=8)
 
         if response.status_code == 200:
             first_chunk = response.text[:2000]

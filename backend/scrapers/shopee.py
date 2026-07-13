@@ -49,7 +49,7 @@ def scrape_shopee(product_query: str):
     params = {
         "by": "relevancy",
         "keyword": product_query,
-        "limit": 30,
+        "limit": 50,
         "newest": 0,
         "order": "desc",
         "page_type": "search",

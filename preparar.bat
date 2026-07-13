@@ -3,7 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
 set "BACKEND_DIR=%ROOT%backend\"
-set "FRONTEND_DIR=%ROOT%frontend\"
+set "FRONTEND_DIR=%ROOT%"
 set "VENV_DIR=%BACKEND_DIR%.venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "BACKEND_ENV=%BACKEND_DIR%.env"
@@ -20,7 +20,7 @@ if not exist "%BACKEND_DIR%main.py" (
 )
 
 if not exist "%FRONTEND_DIR%package.json" (
-  echo ERRO: A pasta frontend nao foi encontrada em "%FRONTEND_DIR%".
+  echo ERRO: O frontend nao foi encontrado na pasta principal "%FRONTEND_DIR%".
   exit /b 1
 )
 

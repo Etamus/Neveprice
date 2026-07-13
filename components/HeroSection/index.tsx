@@ -25,8 +25,14 @@ export const HeroSection = () => {
     <section className="relative min-h-screen w-full bg-neutral-100 px-0 pt-[86px] text-black">
       <nav className="fixed left-0 right-0 top-0 z-30 bg-white text-black shadow-[0_3px_12px_rgba(0,0,0,0.18)]">
         <div className="relative flex min-h-[86px] w-full items-center justify-center px-6">
-          <div className="absolute left-6 top-0 flex h-[74px] items-center text-left text-[28px] font-extrabold tracking-[-0.01em] text-black">
-            NevePrice
+          <div
+            className="absolute left-6 top-0 flex h-[74px] items-center text-left text-[28px] font-black tracking-normal text-black"
+            style={{
+              fontFamily: '"Segoe UI", Arial, sans-serif',
+              fontWeight: 900,
+            }}
+          >
+            NEVEPRICE
           </div>
 
           <div className="flex w-full flex-col items-center justify-center px-44 max-lg:px-36 max-md:px-28">
