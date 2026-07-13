@@ -1,0 +1,9 @@
+fastapi[standard]==0.113.0
+pydantic==2.8.0
+uvicorn==0.30.6
+gunicorn==23.0.0
+requests==2.32.3
+beautifulsoup4==4.12.3
+sqlalchemy==2.0.32
+python-dotenv==1.0.1
+cachetools==7.0.4
