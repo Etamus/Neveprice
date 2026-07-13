@@ -99,6 +99,39 @@ ACCESSORY_TERMS = {
     "vidro",
 }
 
+PRODUCT_STOP_WORDS = {
+    "a",
+    "apple",
+    "as",
+    "celular",
+    "com",
+    "da",
+    "das",
+    "de",
+    "do",
+    "dos",
+    "e",
+    "em",
+    "na",
+    "no",
+    "o",
+    "os",
+    "para",
+    "por",
+}
+
+STORE_WORDS = {
+    "amazon",
+    "livre",
+    "loja",
+    "magalu",
+    "magazine",
+    "mercado",
+    "merlin",
+    "leroy",
+    "shopee",
+}
+
 VARIANT_SCRAPERS = {
     "scrape_amazon_comparison",
     "scrape_leroy",
@@ -185,13 +218,21 @@ def _normalize_result(item, product_query, store_label=None):
 
 def _deduplicate(items):
     unique = []
-    seen = set()
+    seen_urls = set()
+    seen_listings = set()
 
     for item in items:
-        key = item["url"].split("?")[0].rstrip("/")
-        if key in seen:
+        url_key = item["url"].split("?")[0].rstrip("/")
+        listing_key = (
+            _normalize_text(item["store"]),
+            " ".join(sorted(_product_tokens(item["name"]))),
+            round(item["price"], 2),
+        )
+
+        if url_key in seen_urls or listing_key in seen_listings:
             continue
-        seen.add(key)
+        seen_urls.add(url_key)
+        seen_listings.add(listing_key)
         unique.append(item)
 
     return unique
@@ -209,6 +250,112 @@ def _product_response(item, fallback_id):
         "url": item["url"],
         "last_update": datetime.utcnow().isoformat(),
     }
+
+
+def _product_tokens(name):
+    return {
+        token
+        for token in re.findall(
+            r"[a-z0-9]+",
+            re.sub(
+                r"(\d+)\s+(gb|tb|kg|pol|polegadas|litros|l|ml)",
+                r"\1\2",
+                _normalize_text(name),
+            ),
+        )
+        if token not in PRODUCT_STOP_WORDS
+        and token not in STORE_WORDS
+        and len(token) > 1
+    }
+
+
+def _spec_tokens(tokens, query_tokens):
+    return {
+        token
+        for token in tokens
+        if token not in query_tokens and any(character.isdigit() for character in token)
+    }
+
+
+def _same_product(cluster_tokens, item_tokens, query_tokens):
+    if not cluster_tokens or not item_tokens:
+        return False
+
+    cluster_specs = _spec_tokens(cluster_tokens, query_tokens)
+    item_specs = _spec_tokens(item_tokens, query_tokens)
+    if cluster_specs and item_specs and cluster_specs != item_specs:
+        return False
+
+    shared = cluster_tokens.intersection(item_tokens)
+    score = len(shared) / max(1, max(len(cluster_tokens), len(item_tokens)))
+    shared_numbers = {
+        token for token in shared if any(character.isdigit() for character in token)
+    }
+
+    return score >= 0.72 or (
+        score >= 0.62
+        and bool(shared_numbers)
+        and (not cluster_specs or not item_specs or cluster_specs == item_specs)
+    )
+
+
+def _build_comparison_rows(products, product_query):
+    clusters = []
+    query_tokens = _product_tokens(product_query)
+
+    for product in products:
+        item_tokens = _product_tokens(product["name"])
+        target_cluster = None
+
+        for cluster in clusters:
+            if _same_product(cluster["tokens"], item_tokens, query_tokens):
+                target_cluster = cluster
+                break
+
+        if not target_cluster:
+            target_cluster = {"tokens": set(item_tokens), "offers": []}
+            clusters.append(target_cluster)
+
+        target_cluster["tokens"].update(item_tokens)
+        target_cluster["offers"].append(product)
+
+    rows = []
+    for index, cluster in enumerate(clusters, start=1):
+        offers = sorted(cluster["offers"], key=lambda item: item["current_price"])
+        cheapest = offers[0]
+        prices = [offer["current_price"] for offer in offers]
+        pma = sum(prices) / len(prices)
+        difference_value = cheapest["current_price"] - pma
+        difference_percent = (
+            abs(difference_value) / pma * 100
+            if pma > 0
+            else 0
+        )
+
+        rows.append(
+            {
+                "id": index,
+                "name": cheapest["name"],
+                "store_count": len({offer["store"] for offer in offers}),
+                "offer_count": len(offers),
+                "pma": round(pma, 2),
+                "cheapest_price": cheapest["current_price"],
+                "cheapest_store": cheapest["store"],
+                "cheapest_url": cheapest["url"],
+                "difference_value": round(difference_value, 2),
+                "difference_percent": round(difference_percent, 2),
+                "offers": offers,
+            }
+        )
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["cheapest_price"],
+            -row["offer_count"],
+            row["name"],
+        ),
+    )
 
 
 def _save_result(item, db: Session):
@@ -291,7 +438,7 @@ def _run_store_scrapers(store_config, product_query):
                 and not _is_accessory_mismatch(normalized, product_query)
             )
 
-            if normalized_results:
+            if len(normalized_results) >= 30:
                 break
 
         if normalized_results:
@@ -310,31 +457,38 @@ def _run_store_scrapers(store_config, product_query):
 
         time.sleep(random.uniform(0.2, 0.6))
 
-    return sorted(_deduplicate(store_results), key=lambda item: _sort_key(item, product_query))
+    return sorted(
+        _deduplicate(store_results),
+        key=lambda item: _sort_key(item, product_query),
+    )
 
 
 def run_all_scrapers(product_query: str, db: Session):
     print(f" LOG: Iniciando buscas gratuitas para '{product_query}'")
     store_payloads = []
     available_results = []
+    response_id = 1
 
     for store_config in TARGET_STORES:
         store_items = _run_store_scrapers(store_config, product_query)
-        best_item = store_items[0] if store_items else None
+        store_products = []
 
-        if best_item:
-            response_product = _product_response(
-                best_item,
-                fallback_id=len(available_results) + 1,
-            )
-            available_results.append(response_product)
+        for store_item in store_items[:30]:
+            store_products.append(_product_response(store_item, response_id))
+            response_id += 1
+
+        available_results.extend(store_products)
+        best_product = store_products[0] if store_products else None
+
+        if best_product:
             store_payloads.append(
                 {
                     "key": store_config["key"],
                     "label": store_config["label"],
                     "available": True,
                     "message": None,
-                    "product": response_product,
+                    "product": best_product,
+                    "products": store_products,
                 }
             )
         else:
@@ -345,17 +499,12 @@ def run_all_scrapers(product_query: str, db: Session):
                     "available": False,
                     "message": "Não disponível",
                     "product": None,
+                    "products": [],
                 }
             )
 
     processed_count = 0
-    for index, item in enumerate(
-        [
-            store_payload["product"]
-            for store_payload in store_payloads
-            if store_payload["product"]
-        ]
-    ):
+    for index, item in enumerate(available_results[:150]):
         storage_item = {
             "name": item["name"],
             "price": item["current_price"],
@@ -372,13 +521,16 @@ def run_all_scrapers(product_query: str, db: Session):
             db.rollback()
 
     db.commit()
+    comparison_rows = _build_comparison_rows(available_results, product_query)
     print(
         " LOG: Finalizado. "
-        f"{len(available_results)} lojas com oferta, "
+        f"{len(available_results)} ofertas encontradas, "
+        f"{len(comparison_rows)} linhas comparativas, "
         f"{processed_count} precos novos/atualizados."
     )
     return {
         "processed_count": processed_count,
         "results": available_results,
         "stores": store_payloads,
+        "comparison": comparison_rows,
     }

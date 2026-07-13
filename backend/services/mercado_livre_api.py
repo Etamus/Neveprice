@@ -20,7 +20,7 @@ def search_mercado_livre(product_query: str):
     try:
         params = {
             "q": product_query,
-            "limit": 10,
+            "limit": 30,
             "sort": "price_asc",
         }
         headers = {

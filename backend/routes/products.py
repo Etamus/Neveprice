@@ -111,7 +111,7 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     db.add(new_price)
     db.commit()
 
-    return {"message": "Produto e preco inicial cadastrados!", "id": new_product.id}
+    return {"message": "Produto e preço inicial cadastrados!", "id": new_product.id}
 
 
 @product_router.get("/")
@@ -127,9 +127,11 @@ def refresh_prices(q: str, db: Session = Depends(get_db)):
     return {
         "message": (
             "Busca finalizada. "
-            f"{summary['processed_count']} precos novos ou atualizados"
+            f"{summary['processed_count']} preços novos ou atualizados"
         ),
+        "results": summary["results"],
         "stores": summary["stores"],
+        "comparison": summary["comparison"],
     }
 
 
@@ -138,13 +140,16 @@ def search_and_update(q: str = Query(..., min_length=2), db: Session = Depends(g
     search_text = q.strip()
     summary = run_all_scrapers(search_text, db)
     results = summary["results"]
-    unavailable_count = len([store for store in summary["stores"] if not store["available"]])
+    comparison = summary["comparison"]
+    unavailable_count = len(
+        [store for store in summary["stores"] if not store["available"]]
+    )
 
     if results:
         message = (
-            f"Busca concluida em {len(summary['stores'])} lojas. "
-            f"{len(results)} lojas com oferta e {unavailable_count} "
-            "sem disponibilidade agora."
+            f"Busca concluída. {len(results)} ofertas analisadas em "
+            f"{len(comparison)} linhas comparativas; {unavailable_count} "
+            "lojas sem disponibilidade."
         )
     else:
         message = (
@@ -156,4 +161,5 @@ def search_and_update(q: str = Query(..., min_length=2), db: Session = Depends(g
         "message": message,
         "results": results,
         "stores": summary["stores"],
+        "comparison": comparison,
     }

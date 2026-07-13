@@ -1,160 +1,836 @@
-import { useState } from "react";
-import { ExternalLink, ShoppingBag } from "lucide-react";
-import type { Product, StoreSearchResult } from "../models/product.model";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ImageIcon,
+  LayoutDashboard,
+  List,
+  ShoppingBag,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+import type { ComparisonRow, Product } from "../models/product.model";
 import { PriceChart } from "./PriceChart";
 
 interface SlidingTabsProps {
+  activeTab: number;
+  onTabChange: (tab: number) => void;
+  loading: boolean;
   products: Product[];
-  stores: StoreSearchResult[];
+  unavailableStoreCount: number;
+  comparisonRows: ComparisonRow[];
 }
 
-const unavailableLabel = "Não disponível";
+const LIST_STEP = 15;
+const CARD_STEP = 10;
+const BRAND_FILTERS = ["Consul", "Brastemp"];
+const STORE_FILTERS = [
+  { label: "Mercado Livre", aliases: ["mercado livre", "meli"] },
+  { label: "Magalu", aliases: ["magalu", "magazine luiza"] },
+  { label: "Amazon", aliases: ["amazon"] },
+  { label: "Leroy", aliases: ["leroy", "leroy merlin"] },
+  { label: "Shopee", aliases: ["shopee"] },
+];
+const PRODUCT_STOP_WORDS = new Set([
+  "a",
+  "as",
+  "com",
+  "da",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "na",
+  "no",
+  "os",
+  "para",
+  "por",
+]);
+const STORE_WORDS = new Set([
+  "amazon",
+  "leroy",
+  "magalu",
+  "magazine",
+  "mercado",
+  "livre",
+  "meli",
+  "shopee",
+]);
+const navigationTabs = [
+  { label: "Lista", icon: List },
+  { label: "Cards", icon: ImageIcon },
+  { label: "Dashboard", icon: LayoutDashboard },
+];
+type SortOrder = "price_asc" | "price_desc" | "stores_asc" | "stores_desc";
 
-const formatPrice = (price: number) =>
-  price.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const SORT_OPTIONS: Array<{ label: string; value: SortOrder }> = [
+  { label: "Menor preço", value: "price_asc" },
+  { label: "Maior preço", value: "price_desc" },
+  { label: "Menos lojas", value: "stores_asc" },
+  { label: "Mais lojas", value: "stores_desc" },
+];
 
-export default function SlidingTabs({ products, stores }: SlidingTabsProps) {
-  const [active, setActive] = useState(0);
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value || 0);
+
+const cardCurrencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const formatCardCurrency = (value: number) =>
+  cardCurrencyFormatter.format(value || 0);
+
+const truncateText = (value: string, maxLength = 86) =>
+  value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+
+const normalizeText = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const normalizeProductUnits = (name: string) =>
+  normalizeText(name)
+    .replace(/(\d+)\s*(btus?|btu)\b/g, "$1btu")
+    .replace(/(\d+)\s*(litros?|lts?|lt|l)\b/g, "$1l")
+    .replace(/(\d+)\s*(volts?|volt|v)\b/g, "$1v")
+    .replace(/(\d+)\s*(polegadas?|pol)\b/g, "$1pol")
+    .replace(/(\d+)\s*(quilos?|kg)\b/g, "$1kg")
+    .replace(/(\d+)\s*(gb|tb|ml|w)\b/g, "$1$2");
+
+const productTokens = (name: string) =>
+  new Set(
+    normalizeProductUnits(name)
+      .match(/[a-z0-9]+/g)
+      ?.filter(
+        (token) =>
+          token.length > 1 &&
+          !PRODUCT_STOP_WORDS.has(token) &&
+          !STORE_WORDS.has(token),
+      ) || [],
+  );
+
+const specTokens = (tokens: Set<string>) =>
+  new Set([...tokens].filter((token) => /\d/.test(token)));
+
+const sameProduct = (clusterTokens: Set<string>, itemTokens: Set<string>) => {
+  if (clusterTokens.size === 0 || itemTokens.size === 0) {
+    return false;
+  }
+
+  const clusterSpecs = specTokens(clusterTokens);
+  const itemSpecs = specTokens(itemTokens);
+  const bothHaveSpecs = clusterSpecs.size > 0 && itemSpecs.size > 0;
+
+  const shared = [...clusterTokens].filter((token) => itemTokens.has(token));
+  const sharedNumbers = shared.filter((token) => /\d/.test(token));
+  const unionScore =
+    shared.length / Math.max(1, Math.max(clusterTokens.size, itemTokens.size));
+  const containmentScore =
+    shared.length / Math.max(1, Math.min(clusterTokens.size, itemTokens.size));
 
   return (
-    <div className="w-full flex flex-col items-center mt-10">
-      <div className="relative flex bg-blue-900/40 backdrop-blur-md rounded-full p-1 w-[320px] border border-white/10 shadow-2xl">
-        <div
-          className="absolute top-1 bottom-1 w-1/2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-300 ease-in-out shadow-[0_0_15px_rgba(37,99,235,0.5)]"
-          style={{
-            transform: `translateX(${active * 100}%)`,
-          }}
-        />
+    shared.length >= 3 &&
+    (unionScore >= 0.52 ||
+      containmentScore >= 0.66 ||
+      (sharedNumbers.length > 0 && containmentScore >= 0.55) ||
+      (bothHaveSpecs && sharedNumbers.length > 0 && unionScore >= 0.42))
+  );
+};
 
-        <button
-          onClick={() => setActive(0)}
-          className={`relative z-10 w-1/2 py-2 text-sm font-bold transition-colors ${
-            active === 0 ? "text-white" : "text-blue-200 hover:text-white"
-          }`}
-        >
-          Preços
-        </button>
+const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
-        <button
-          onClick={() => setActive(1)}
-          className={`relative z-10 w-1/2 py-2 text-sm font-bold transition-colors ${
-            active === 1 ? "text-white" : "text-blue-200 hover:text-white"
-          }`}
-        >
-          Histórico
-        </button>
-      </div>
+const bestOfferByStore = (offers: Product[]) => {
+  const bestByStore = new Map<string, Product>();
 
-      <div className="mt-10 w-full">
-        {active === 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-4 animate-fade-in">
-            {stores.map((store) => {
-              const product = store.product;
+  offers.forEach((offer) => {
+    const currentOffer = bestByStore.get(offer.store);
 
-              if (!product) {
-                return (
-                  <div
-                    key={store.key}
-                    className="flex min-h-64 min-w-0 flex-col justify-between overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-lg"
-                  >
-                    <div className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-wide text-blue-100">
-                        {store.label}
-                      </span>
-                      <ShoppingBag
-                        size={16}
-                        className="shrink-0 text-blue-100/60"
-                      />
-                    </div>
+    if (!currentOffer || offer.current_price < currentOffer.current_price) {
+      bestByStore.set(offer.store, offer);
+    }
+  });
 
-                    <div className="flex flex-1 min-w-0 flex-col items-center justify-center text-center">
-                      <span className="max-w-full break-words text-lg font-bold leading-tight text-white">
-                        {store.message || unavailableLabel}
-                      </span>
-                      <span className="mt-2 max-w-full break-words text-xs leading-snug text-blue-100/60">
-                        Sem oferta retornada para esta busca.
-                      </span>
-                    </div>
-                  </div>
-                );
-              }
+  return [...bestByStore.values()].sort(
+    (a, b) => a.current_price - b.current_price,
+  );
+};
 
-              return (
-                <div
-                  key={store.key}
-                  className="flex h-full min-w-0 flex-col overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-lg hover:bg-white/10 transition-all group"
-                >
-                  <div className="flex min-w-0 items-center justify-between gap-2 mb-3">
-                    <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-wide text-cyan-300">
-                      {store.label}
-                    </span>
-                    <ShoppingBag
-                      size={16}
-                      className="shrink-0 text-cyan-300/80"
-                    />
-                  </div>
+const productMatchesBrand = (product: Product, selectedBrands: string[]) => {
+  if (selectedBrands.length === 0) {
+    return true;
+  }
 
-                  {product.image_url && (
-                    <div className="mb-3 flex h-28 shrink-0 items-center justify-center rounded-lg bg-white">
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="max-h-24 max-w-full object-contain"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
+  const searchable = normalizeText(`${product.name} ${product.brand || ""}`);
+  return selectedBrands.some((brand) =>
+    searchable.includes(normalizeText(brand)),
+  );
+};
 
-                  <h3 className="text-slate-200 font-medium leading-snug min-h-14 line-clamp-3 mb-4 group-hover:text-white transition-colors">
-                    {product.name}
-                  </h3>
+const productMatchesStore = (product: Product, selectedStores: string[]) => {
+  if (selectedStores.length === 0) {
+    return true;
+  }
 
-                  <div className="flex min-w-0 flex-col mb-4 mt-auto">
-                    <span className="text-xs text-blue-300/70 uppercase">
-                      Preço atual
-                    </span>
-                    <span className="max-w-full break-words text-xl 2xl:text-2xl font-black leading-tight text-white tabular-nums">
-                      R$ {formatPrice(product.current_price)}
-                    </span>
-                  </div>
+  const storeName = normalizeText(product.store);
+  return selectedStores.some((store) => {
+    const filter = STORE_FILTERS.find((item) => item.label === store);
+    const aliases = filter?.aliases || [store];
+    return aliases.some((alias) => storeName.includes(normalizeText(alias)));
+  });
+};
 
-                  <a
-                    href={product.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-white/5 bg-white/10 px-2 py-2 text-center text-[11px] font-bold leading-tight text-white transition-all hover:bg-gradient-to-r hover:from-blue-600 hover:to-cyan-500"
-                  >
-                    <ExternalLink size={15} className="shrink-0" />
-                    <span className="min-w-0 break-words">ACESSAR PRODUTO</span>
-                  </a>
-                </div>
-              );
-            })}
+const rebuildRowWithOffers = (
+  row: ComparisonRow,
+  offers: Product[],
+): ComparisonRow | null => {
+  const validOffers = offers
+    .filter((offer) => offer.current_price && !Number.isNaN(offer.current_price))
+    .sort((a, b) => a.current_price - b.current_price);
+
+  if (validOffers.length === 0) {
+    return null;
+  }
+
+  const storeOffers = bestOfferByStore(validOffers);
+  const cheapest = storeOffers[0];
+  const pma =
+    storeOffers.reduce((total, offer) => total + offer.current_price, 0) /
+    storeOffers.length;
+  const differenceValue = cheapest.current_price - pma;
+  const differencePercent = pma > 0 ? Math.abs(differenceValue) / pma * 100 : 0;
+
+  return {
+    ...row,
+    name: cheapest.name,
+    store_count: storeOffers.length,
+    offer_count: validOffers.length,
+    pma: roundCurrency(pma),
+    cheapest_price: cheapest.current_price,
+    cheapest_store: cheapest.store,
+    cheapest_url: cheapest.url,
+    difference_value: roundCurrency(differenceValue),
+    difference_percent: roundCurrency(differencePercent),
+    offers: validOffers,
+  };
+};
+
+const formatSignedCurrency = (value: number) => {
+  const formatted = formatCurrency(Math.abs(value));
+
+  if (value < 0) {
+    return `-${formatted}`;
+  }
+
+  if (value > 0) {
+    return formatted;
+  }
+
+  return formatCurrency(0);
+};
+
+const formatPercent = (value: number) =>
+  `${Math.round(Math.abs(value || 0))}%`;
+
+const buildRowFromOffers = (
+  offers: Product[],
+  id: number,
+): ComparisonRow | null => {
+  const validOffers = offers
+    .filter((offer) => offer.current_price && !Number.isNaN(offer.current_price))
+    .sort((a, b) => a.current_price - b.current_price);
+
+  if (validOffers.length === 0) {
+    return null;
+  }
+
+  const storeOffers = bestOfferByStore(validOffers);
+  const cheapest = storeOffers[0];
+  const pma =
+    storeOffers.reduce((total, offer) => total + offer.current_price, 0) /
+    storeOffers.length;
+  const differenceValue = cheapest.current_price - pma;
+  const differencePercent = pma > 0 ? Math.abs(differenceValue) / pma * 100 : 0;
+
+  return {
+    id,
+    name: cheapest.name,
+    store_count: storeOffers.length,
+    offer_count: validOffers.length,
+    pma: roundCurrency(pma),
+    cheapest_price: cheapest.current_price,
+    cheapest_store: cheapest.store,
+    cheapest_url: cheapest.url,
+    difference_value: roundCurrency(differenceValue),
+    difference_percent: roundCurrency(differencePercent),
+    offers: validOffers,
+  };
+};
+
+const buildComparisonRows = (items: Product[]): ComparisonRow[] => {
+  const clusters: Array<{ tokens: Set<string>; offers: Product[] }> = [];
+
+  items.forEach((product) => {
+    const itemTokens = productTokens(product.name);
+    const targetCluster = clusters.find((cluster) =>
+      sameProduct(cluster.tokens, itemTokens),
+    );
+
+    if (targetCluster) {
+      itemTokens.forEach((token) => targetCluster.tokens.add(token));
+      targetCluster.offers.push(product);
+      return;
+    }
+
+    clusters.push({ tokens: itemTokens, offers: [product] });
+  });
+
+  return clusters
+    .map((cluster, index) => buildRowFromOffers(cluster.offers, index + 1))
+    .filter((row): row is ComparisonRow => Boolean(row))
+    .sort((a, b) =>
+      a.cheapest_price === b.cheapest_price
+        ? b.store_count - a.store_count
+        : a.cheapest_price - b.cheapest_price,
+    );
+};
+
+const sortRows = (rows: ComparisonRow[], sortOrder: SortOrder) =>
+  [...rows].sort((a, b) => {
+    if (sortOrder === "price_asc") {
+      return a.cheapest_price - b.cheapest_price;
+    }
+
+    if (sortOrder === "price_desc") {
+      return b.cheapest_price - a.cheapest_price;
+    }
+
+    if (sortOrder === "stores_asc") {
+      return (
+        a.store_count - b.store_count ||
+        a.cheapest_price - b.cheapest_price ||
+        a.name.localeCompare(b.name)
+      );
+    }
+
+    return (
+      b.store_count - a.store_count ||
+      b.offer_count - a.offer_count ||
+      a.cheapest_price - b.cheapest_price ||
+      a.name.localeCompare(b.name)
+    );
+  });
+
+const sortProducts = (products: Product[], sortOrder: SortOrder) => {
+  if (sortOrder === "price_asc") {
+    return [...products].sort((a, b) => a.current_price - b.current_price);
+  }
+
+  if (sortOrder === "price_desc") {
+    return [...products].sort((a, b) => b.current_price - a.current_price);
+  }
+
+  return [...products];
+};
+
+const TableHeader = () => (
+  <thead>
+    <tr className="bg-slate-200 text-left text-xs font-semibold text-slate-700">
+      <th className="w-[44%] px-6 py-4">Produto</th>
+      <th className="w-[10%] px-5 py-4 text-center">Lojas</th>
+      <th className="w-[14%] px-5 py-4 text-right">Preço sugerido</th>
+      <th className="w-[14%] px-5 py-4 text-center">Mais barato</th>
+      <th className="w-[18%] px-5 py-4 text-center">Diferença</th>
+    </tr>
+  </thead>
+);
+
+const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-300 !bg-white px-6 py-3 text-sm font-bold text-black shadow-[0_8px_22px_rgba(0,0,0,0.08)] transition-all hover:!bg-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.12)]"
+  >
+    <span>Carregar mais</span>
+    <ChevronDown size={17} strokeWidth={2.4} />
+  </button>
+);
+
+const DifferenceBadge = ({ row }: { row: ComparisonRow }) => {
+  const isNegative = row.difference_value < 0;
+  const isPositive = row.difference_value > 0;
+  const Icon = isNegative ? TrendingDown : TrendingUp;
+
+  return (
+    <div
+      className={`inline-flex min-w-[178px] items-center justify-center gap-2 whitespace-nowrap rounded px-3 py-2 text-sm font-black leading-none text-white ${
+        isNegative
+          ? "bg-red-600"
+          : isPositive
+            ? "bg-emerald-700"
+            : "bg-slate-500"
+      }`}
+    >
+      <span>{formatSignedCurrency(row.difference_value)}</span>
+      <Icon size={16} className="shrink-0" />
+      <span>{formatPercent(row.difference_percent)}</span>
+    </div>
+  );
+};
+
+export default function SlidingTabs({
+  activeTab,
+  onTabChange,
+  loading,
+  products,
+  unavailableStoreCount,
+  comparisonRows,
+}: SlidingTabsProps) {
+  const [visibleRows, setVisibleRows] = useState(LIST_STEP);
+  const [visibleCards, setVisibleCards] = useState(CARD_STEP);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("stores_desc");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  const rows = useMemo(
+    () =>
+      products.length > 0
+        ? buildComparisonRows(products)
+        : comparisonRows,
+    [comparisonRows, products],
+  );
+
+  useEffect(() => {
+    setSortOrder("stores_desc");
+    setSortOpen(false);
+  }, [products]);
+
+  useEffect(() => {
+    if (!sortOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        sortRef.current &&
+        !sortRef.current.contains(event.target as Node)
+      ) {
+        setSortOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [sortOpen]);
+
+  const filteredRows = useMemo(() => {
+    const rowsWithFilters = rows
+      .map((row) => {
+        const offers = (row.offers?.length ? row.offers : [])
+          .filter((offer) => productMatchesBrand(offer, selectedBrands))
+          .filter((offer) => productMatchesStore(offer, selectedStores));
+
+        if (offers.length > 0) {
+          return rebuildRowWithOffers(row, offers);
+        }
+
+        if (
+          selectedStores.length === 0 &&
+          selectedBrands.length === 0
+        ) {
+          return row;
+        }
+
+        return null;
+      })
+      .filter((row): row is ComparisonRow => Boolean(row));
+
+    return sortRows(rowsWithFilters, sortOrder);
+  }, [rows, selectedBrands, selectedStores, sortOrder]);
+
+  useEffect(() => {
+    setVisibleRows(LIST_STEP);
+  }, [filteredRows]);
+
+  const visibleComparisonRows = filteredRows.slice(0, visibleRows);
+  const sortedProducts = useMemo(() => {
+    const productsWithFilters = products
+      .filter((product) => productMatchesBrand(product, selectedBrands))
+      .filter((product) => productMatchesStore(product, selectedStores));
+
+    return sortProducts(productsWithFilters, sortOrder);
+  }, [products, selectedBrands, selectedStores, sortOrder]);
+
+  useEffect(() => {
+    setVisibleCards(CARD_STEP);
+  }, [sortedProducts]);
+
+  const visibleProducts = sortedProducts.slice(0, visibleCards);
+  const displayedOfferCount =
+    activeTab === 0
+      ? filteredRows.reduce((total, row) => total + row.offer_count, 0)
+      : sortedProducts.length;
+  const displayedProductCount =
+    activeTab === 0 ? filteredRows.length : sortedProducts.length;
+  const sortLabel =
+    SORT_OPTIONS.find((option) => option.value === sortOrder)?.label ||
+    "Mais lojas";
+  const tableMessage = loading
+    ? "Pesquisando..."
+    : products.length > 0 || rows.length > 0
+      ? "Nenhum produto disponível para os filtros selecionados."
+      : "Pesquise um produto para preencher a lista.";
+
+  const toggleBrandFilter = (brand: string) => {
+    setSelectedBrands((current) =>
+      current.includes(brand)
+        ? current.filter((item) => item !== brand)
+        : [...current, brand],
+    );
+  };
+
+  const toggleStoreFilter = (store: string) => {
+    setSelectedStores((current) =>
+      current.includes(store)
+        ? current.filter((item) => item !== store)
+        : [...current, store],
+    );
+  };
+
+  const selectSortOrder = (order: SortOrder) => {
+    setSortOrder(order);
+    setSortOpen(false);
+  };
+
+  return (
+    <div className="w-full">
+      <div className="flex w-full items-start gap-6 pl-5 text-left">
+        <aside className="w-72 shrink-0 px-1">
+          <div className="px-3 pb-3">
+            <h2 className="text-xl font-extrabold tracking-[-0.01em] text-black">
+              Filtros
+            </h2>
           </div>
-        ) : (
-          <div className="w-full bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-8 min-h-[400px] flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-blue-200 font-medium">
-                Análise de variação temporal
-              </p>
 
-              {active === 1 && (
-                <div className="w-full mt-4">
-                  {products && products.length > 0 ? (
-                    <PriceChart products={products} />
+          <div className="space-y-3 px-3">
+            <section>
+              <h3 className="text-sm font-bold text-black">Marca</h3>
+              <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+                {BRAND_FILTERS.map((brand, index) => (
+                  <button
+                    key={brand}
+                    type="button"
+                    onClick={() => toggleBrandFilter(brand)}
+                    className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-2 text-left text-sm font-semibold text-black transition-colors hover:!bg-neutral-50 ${
+                      index > 0 ? "border-t border-neutral-100" : ""
+                    }`}
+                  >
+                    <span>{brand}</span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        selectedBrands.includes(brand)
+                          ? "bg-black"
+                          : "bg-neutral-300"
+                      }`}
+                    >
+                      <span
+                        className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                          selectedBrands.includes(brand)
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-bold text-black">Loja</h3>
+              <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+                {STORE_FILTERS.map((store, index) => (
+                  <button
+                    key={store.label}
+                    type="button"
+                    onClick={() => toggleStoreFilter(store.label)}
+                    className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-2 text-left text-sm font-semibold text-black transition-colors hover:!bg-neutral-50 ${
+                      index > 0 ? "border-t border-neutral-100" : ""
+                    }`}
+                  >
+                    <span>{store.label}</span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        selectedStores.includes(store.label)
+                          ? "bg-black"
+                          : "bg-neutral-300"
+                      }`}
+                    >
+                      <span
+                        className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                          selectedStores.includes(store.label)
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1 pr-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm font-normal text-neutral-700">
+              <span className="font-semibold text-black">Mostrando:</span>{" "}
+              <span>{displayedOfferCount} ofertas</span>,{" "}
+              <span>{displayedProductCount} produtos</span>,{" "}
+              <span>{unavailableStoreCount} loja(as) sem disponibilidade</span>
+            </p>
+
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="relative" ref={sortRef}>
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((current) => !current)}
+                  className="flex h-7 items-center gap-1 border-0 !bg-transparent px-0 py-0 text-[10px] font-normal text-black hover:!bg-transparent"
+                  aria-expanded={sortOpen}
+                >
+                  <span>{sortLabel}</span>
+                  {sortOpen ? (
+                    <ChevronUp size={16} className="text-blue-500" />
                   ) : (
-                    <p className="text-white text-center">
-                      Aguardando dados...
-                    </p>
+                    <ChevronDown size={16} className="text-blue-500" />
                   )}
-                </div>
-              )}
+                </button>
+
+                {sortOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-40 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+                    {SORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => selectSortOrder(option.value)}
+                        className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition-colors hover:!bg-neutral-100 ${
+                          sortOrder === option.value
+                            ? "!bg-neutral-100 font-semibold text-black"
+                            : "!bg-white font-normal text-neutral-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="inline-flex gap-1">
+                {navigationTabs.map((tab, index) => {
+                  const Icon = tab.icon;
+
+                  return (
+                    <button
+                      key={tab.label}
+                      type="button"
+                      onClick={() => onTabChange(index)}
+                      className={`flex h-10 items-center gap-2 border border-transparent px-4 py-0 text-[14px] font-semibold transition-colors ${
+                        activeTab === index
+                          ? "border-neutral-300 bg-neutral-100 text-black shadow-sm"
+                          : "bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-black"
+                      }`}
+                    >
+                      <Icon size={18} strokeWidth={2.4} className="shrink-0" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        )}
+
+          {activeTab === 0 && (
+            <div className="animate-fade-in">
+                <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-slate-900">
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full min-w-[1260px] table-fixed border-separate border-spacing-0">
+                      <TableHeader />
+                      <tbody>
+                        {filteredRows.length > 0 && !loading ? (
+                          visibleComparisonRows.map((row, index) => (
+                            <tr
+                              key={`${row.id}-${row.name}`}
+                              className={
+                                index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                              }
+                            >
+                              <td className="w-[44%] px-6 py-4 text-left align-middle">
+                                <p
+                                  className="max-w-[620px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-normal leading-snug text-slate-800"
+                                  title={row.name}
+                                >
+                                  {truncateText(row.name)}
+                                </p>
+                              </td>
+                              <td className="px-5 py-4 text-center align-middle">
+                                <div className="inline-flex min-w-[92px] items-center justify-center gap-2 text-sm font-black text-slate-800">
+                                  <span>{row.store_count}</span>
+                                  <ShoppingBag
+                                    size={16}
+                                    className="text-slate-500"
+                                  />
+                                </div>
+                                <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-slate-500">
+                                  {row.store_count} lojas
+                                </p>
+                              </td>
+                              <td className="whitespace-nowrap px-5 py-4 text-right align-middle text-sm font-normal text-slate-700">
+                                {formatCurrency(row.pma)}
+                              </td>
+                              <td className="px-5 py-4 text-center align-middle">
+                                <a
+                                  href={row.cheapest_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex min-w-[128px] items-center justify-center gap-2 rounded bg-red-600 px-3 py-2 text-sm font-black leading-none text-white hover:bg-red-700"
+                                >
+                                  {formatCurrency(row.cheapest_price)}
+                                  <ExternalLink
+                                    size={14}
+                                    className="shrink-0"
+                                  />
+                                </a>
+                                <p className="mt-1 max-w-[160px] truncate text-[11px] font-semibold text-slate-500">
+                                  {row.cheapest_store}
+                                </p>
+                              </td>
+                              <td className="whitespace-nowrap px-5 py-4 text-center align-middle">
+                                <DifferenceBadge row={row} />
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr className="bg-white">
+                            <td
+                              colSpan={5}
+                              className="h-[360px] px-6 py-4 text-center align-middle text-base font-semibold text-black"
+                            >
+                              {tableMessage}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+            {visibleRows < filteredRows.length && (
+              <div className="mt-5 flex justify-center">
+                <LoadMoreButton
+                  onClick={() =>
+                    setVisibleRows((current) => current + LIST_STEP)
+                  }
+                />
+              </div>
+            )}
+            </div>
+          )}
+
+          {activeTab === 1 && (
+          <div className="animate-fade-in">
+            {visibleProducts.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {visibleProducts.map((product) => (
+                    <article
+                      key={`${product.id}-${product.url}`}
+                      className="group flex min-h-[430px] min-w-0 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white text-left text-black shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-shadow hover:shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
+                    >
+                      <div className="flex h-[270px] shrink-0 items-center justify-center bg-neutral-50 px-5 py-5">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="max-h-full max-w-full object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <ImageIcon size={34} className="text-black" />
+                        )}
+                      </div>
+
+                      <div className="flex min-h-[160px] flex-col justify-between border-t border-neutral-100 bg-white px-4 py-4">
+                        <h3 className="line-clamp-2 min-h-10 break-words text-[13px] font-normal leading-snug text-black">
+                          {product.name}
+                        </h3>
+                        <div className="mt-3 flex min-w-0 items-end justify-between gap-3">
+                          <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[25px] font-normal leading-none text-black tabular-nums">
+                            {formatCardCurrency(product.current_price)}
+                          </p>
+                          <a
+                            href={product.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-neutral-200 !bg-white px-3 text-[11px] font-semibold text-black transition-colors hover:!bg-neutral-100"
+                          >
+                            <span>Acessar produto</span>
+                            <ExternalLink size={13} className="shrink-0" />
+                          </a>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {visibleCards < sortedProducts.length && (
+                  <div className="mt-5 flex justify-center">
+                    <LoadMoreButton
+                      onClick={() =>
+                        setVisibleCards((current) => current + CARD_STEP)
+                      }
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-8 text-center text-black">
+                Nenhum produto disponível.
+              </div>
+            )}
+          </div>
+          )}
+
+          {activeTab === 2 && (
+          <div className="animate-fade-in">
+            {sortedProducts.length > 0 ? (
+              <div className="w-full overflow-x-auto">
+                <PriceChart products={sortedProducts} />
+              </div>
+            ) : (
+              <p className="py-16 text-center text-black">
+                Nenhum produto disponível.
+              </p>
+            )}
+          </div>
+          )}
+        </div>
       </div>
     </div>
   );

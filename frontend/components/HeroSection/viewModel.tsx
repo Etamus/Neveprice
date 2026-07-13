@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type {
+  ComparisonRow,
   Product,
   SearchResponse,
   StoreSearchResult,
@@ -19,10 +20,13 @@ const useHeroSection = () => {
   const [productName, setProductName] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [storeResults, setStoreResults] = useState<StoreSearchResult[]>([]);
+  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
 
   const handleSearch = async () => {
+    if (loading) return;
+
     const query = productName.trim();
     if (!query) return;
 
@@ -44,15 +48,18 @@ const useHeroSection = () => {
       const data = (await response.json()) as SearchResponse;
       const receivedProducts = data.results || [];
       const receivedStores = data.stores || [];
+      const receivedComparison = data.comparison || [];
 
       console.log("Produtos recebidos:", receivedProducts);
       setProducts(receivedProducts);
       setStoreResults(receivedStores);
+      setComparisonRows(receivedComparison);
       setFeedback(data.message || "");
     } catch (e) {
       console.error("Erro ao buscar dados:", e);
       setProducts([]);
       setStoreResults([]);
+      setComparisonRows([]);
       setFeedback("Não foi possível buscar os preços agora.");
     } finally {
       setLoading(false);
@@ -63,6 +70,7 @@ const useHeroSection = () => {
     productName,
     products,
     storeResults,
+    comparisonRows,
     loading,
     feedback,
     setProductName,

@@ -83,7 +83,7 @@ def scrape_comparison_store(product_query: str, store_key: str, store_label: str
                 print(f"{source_name} retornou HTTP {response.status_code}")
                 continue
 
-            for item in _extract_hits(response.text)[:30]:
+            for item in _extract_hits(response.text)[:50]:
                 best_offer = item.get("bestOffer") or {}
                 merchant_name = best_offer.get("merchantName") or ""
                 if not _matches_store(merchant_name, store_key):

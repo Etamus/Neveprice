@@ -25,7 +25,7 @@ def scrape_amazon(product_name):
     soup = BeautifulSoup(html_content, "html.parser")
     products = []
 
-    items = soup.find_all("div", {"data-component-type": "s-search-result"})[:8]
+    items = soup.find_all("div", {"data-component-type": "s-search-result"})[:30]
 
     for item in items:
         title_tag = item.find("h2")

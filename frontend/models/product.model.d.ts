@@ -17,10 +17,26 @@ export interface StoreSearchResult {
   available: boolean;
   message?: string | null;
   product: Product | null;
+  products?: Product[];
+}
+
+export interface ComparisonRow {
+  id: number;
+  name: string;
+  store_count: number;
+  offer_count: number;
+  pma: number;
+  cheapest_price: number;
+  cheapest_store: string;
+  cheapest_url: string;
+  difference_value: number;
+  difference_percent: number;
+  offers: Product[];
 }
 
 export interface SearchResponse {
   message?: string;
   results?: Product[];
   stores?: StoreSearchResult[];
+  comparison?: ComparisonRow[];
 }

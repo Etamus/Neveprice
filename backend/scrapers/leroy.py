@@ -95,7 +95,7 @@ def scrape_leroy(product_query: str):
     params = urlencode(
         {
             "query": product_query,
-            "hitsPerPage": 10,
+            "hitsPerPage": 30,
             "page": 0,
             "analytics": "false",
         }
