@@ -12,6 +12,7 @@ class Product(Base):
     brand = Column(String, index=True)
     image_url = Column(String, nullable=True)
     category = Column(String, index=True)
+    sku = Column(String, index=True, nullable=True)
     
     # Relacionamento: Um produto tem muitos registros de preço
     prices = relationship("PriceHistory", back_populates="product")
@@ -22,8 +23,18 @@ class PriceHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"))
     price = Column(Float, nullable=False)
-    store = Column(String, index=True) 
+    store = Column(String, index=True)
+    source = Column(String, index=True, nullable=True)
     url = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     product = relationship("Product", back_populates="prices")
+
+
+class KnownSku(Base):
+    __tablename__ = "known_skus"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String, unique=True, index=True, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

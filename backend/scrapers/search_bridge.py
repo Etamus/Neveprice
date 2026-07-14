@@ -11,7 +11,7 @@ READER_URL = "https://r.jina.ai/http://https://html.duckduckgo.com/html/?q="
 
 STORE_CONFIG = {
     "amazon": {
-        "label": "Amazon",
+        "label": "Amazon Brasil",
         "domain": "amazon.com.br",
         "site_query": "site:amazon.com.br/dp OR site:amazon.com.br/gp/product",
     },
@@ -34,6 +34,37 @@ STORE_CONFIG = {
         "label": "Shopee",
         "domain": "shopee.com.br",
         "site_query": "site:shopee.com.br/product",
+    },
+    "dufrio": {
+        "label": "Dufrio",
+        "domain": "dufrio.com.br",
+        "site_query": "site:dufrio.com.br",
+    },
+    "friolar": {
+        "label": "Friolar",
+        "domain": "friolarpecas.com.br",
+        "domains": ("friolarpecas.com.br", "friolar.lojaintegrada.com.br"),
+        "site_query": "site:friolarpecas.com.br OR site:friolar.lojaintegrada.com.br",
+    },
+    "refrigeracao_mota": {
+        "label": "Refrigeração Mota",
+        "domain": "refrigeracaomota.com.br",
+        "site_query": "site:refrigeracaomota.com.br/loja",
+    },
+    "mg_parts": {
+        "label": "MG Parts",
+        "domain": "mgparts.com.br",
+        "site_query": "site:mgparts.com.br/products",
+    },
+    "gold_service": {
+        "label": "Gold Service",
+        "domain": "goldservice.com.br",
+        "site_query": "site:goldservice.com.br",
+    },
+    "comclick": {
+        "label": "ComClick",
+        "domain": "comclick.com.br",
+        "site_query": "site:comclick.com.br",
     },
 }
 
@@ -58,6 +89,7 @@ GENERIC_TITLE_TERMS = (
 
 GENERIC_PATH_PARTS = (
     "/busca",
+    "/buscar",
     "/campanha",
     "/categoria",
     "/departamento",
@@ -161,6 +193,32 @@ def _parse_price(value):
     return price if price > 0 else None
 
 
+def _seller_from_product_url(product_url, store_key, store_label):
+    parsed = urlparse(product_url or "")
+    query = parse_qs(parsed.query)
+
+    seller_id = (query.get("seller_id") or [""])[0].strip()
+    if seller_id:
+        return f"{seller_id}-Magalu" if store_key == "magalu" else seller_id
+
+    path = unquote(parsed.path)
+    if store_key == "mercado_livre":
+        match = re.search(r"/(MLB-\d+)", path, re.I)
+        if match:
+            return f"{match.group(1).upper()}-ML"
+        match = re.search(r"/((?:MLB|MLBU)\d+)", path, re.I)
+        if match:
+            return f"{match.group(1).upper()}-ML"
+
+    if store_key == "shopee":
+        match = re.search(r"/product/(\d+)/\d+|-i\.(\d+)\.\d+", path)
+        shop_id = next((group for group in match.groups() if group), None) if match else None
+        if shop_id:
+            return f"Shopee Loja {shop_id}"
+
+    return store_label
+
+
 def _prices_from_text(text):
     prices = []
     for match in re.finditer(r"R\$\s*[\d.]+(?:,\d{2})?", text):
@@ -260,6 +318,25 @@ def _is_product_url(product_url, store_key):
     if store_key == "leroy_merlin":
         return path.count("/") >= 2
 
+    if store_key == "dufrio":
+        return path.endswith(".html")
+
+    if store_key == "friolar":
+        return (
+            "/produto/" in path
+            or path.endswith(".html")
+            or (path.count("/") >= 1 and "/products/" not in path)
+        )
+
+    if store_key == "refrigeracao_mota":
+        return "/loja/" in path
+
+    if store_key == "mg_parts":
+        return "/products/" in path
+
+    if store_key in {"gold_service", "comclick"}:
+        return path.count("/") >= 1
+
     return True
 
 
@@ -343,6 +420,7 @@ def scrape_search_bridge(product_query: str, store_key: str):
     minimum_price = _minimum_price(product_query)
 
     try:
+        allowed_domains = config.get("domains") or (config["domain"],)
         search_results = _direct_search_results(query)
         if not search_results:
             search_results = _reader_search_results(query)
@@ -351,7 +429,7 @@ def scrape_search_bridge(product_query: str, store_key: str):
         seen_urls = set()
 
         for raw_title, product_url, text in search_results:
-            if config["domain"] not in product_url:
+            if not any(domain in product_url for domain in allowed_domains):
                 continue
             if not _is_product_url(product_url, store_key):
                 continue
@@ -377,7 +455,17 @@ def scrape_search_bridge(product_query: str, store_key: str):
                 {
                     "name": title,
                     "price": min(prices),
-                    "store": config["label"],
+                    "store": _seller_from_product_url(
+                        product_url,
+                        store_key,
+                        config["label"],
+                    ),
+                    "source": config["label"],
+                    "seller": _seller_from_product_url(
+                        product_url,
+                        store_key,
+                        config["label"],
+                    ),
                     "url": product_url,
                     "brand": config["label"],
                     "category": product_query,
@@ -412,3 +500,27 @@ def scrape_magalu_bridge(product_query: str):
 
 def scrape_leroy_bridge(product_query: str):
     return scrape_search_bridge(product_query, "leroy_merlin")
+
+
+def scrape_dufrio_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "dufrio")
+
+
+def scrape_friolar_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "friolar")
+
+
+def scrape_refrigeracao_mota_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "refrigeracao_mota")
+
+
+def scrape_mg_parts_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "mg_parts")
+
+
+def scrape_gold_service_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "gold_service")
+
+
+def scrape_comclick_bridge(product_query: str):
+    return scrape_search_bridge(product_query, "comclick")

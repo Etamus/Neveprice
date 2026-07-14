@@ -93,7 +93,9 @@ def scrape_shopee(product_query: str):
                 {
                     "name": name.strip(),
                     "price": price,
-                    "store": "Shopee",
+                    "store": f"Shopee Loja {shop_id}",
+                    "source": "Shopee",
+                    "seller": f"Shopee Loja {shop_id}",
                     "url": f"{BASE_URL}/product/{shop_id}/{item_id}",
                     "brand": "Shopee",
                     "category": product_query,

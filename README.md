@@ -24,8 +24,14 @@ A comparação considera somente estas lojas:
 - Mercado Livre
 - Shopee
 - Leroy Merlin
-- Amazon
+- Amazon Brasil
 - Magazine Luiza
+- Dufrio
+- Friolar
+- Refrigeração Mota
+- MG Parts
+- Gold Service
+- ComClick
 
 Fontes gratuitas podem bloquear ou omitir dados em alguns momentos. Quando uma loja não retorna preço confiável, ela é tratada como indisponível.
 

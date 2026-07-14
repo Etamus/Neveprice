@@ -44,11 +44,20 @@ def search_mercado_livre(product_query: str):
         results = []
 
         for item in data.get("results", []):
+            seller = item.get("seller") or {}
+            seller_name = (
+                seller.get("nickname")
+                or seller.get("eshop", {}).get("nick_name")
+                or (f"Mercado Livre Loja {seller.get('id')}" if seller.get("id") else None)
+                or "Mercado Livre"
+            )
             results.append(
                 {
                     "name": item.get("title"),
                     "price": float(item.get("price", 0)),
-                    "store": "Mercado Livre",
+                    "store": seller_name,
+                    "source": "Mercado Livre",
+                    "seller": seller_name,
                     "url": item.get("permalink"),
                     "brand": extract_brand(item) or "Mercado Livre",
                     "category": product_query,

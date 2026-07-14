@@ -7,27 +7,53 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from models.product import PriceHistory, Product
+from services.mercado_livre_api import search_mercado_livre
 from scrapers.amazon import scrape_amazon
 from scrapers.comparison import (
     scrape_comparison_catalog,
     scrape_target_catalog,
     scrape_amazon_comparison,
+    scrape_comclick_comparison,
+    scrape_dufrio_comparison,
+    scrape_friolar_comparison,
+    scrape_gold_service_comparison,
     scrape_magalu_comparison,
     scrape_mercado_livre_comparison,
+    scrape_mg_parts_comparison,
+    scrape_refrigeracao_mota_comparison,
     scrape_shopee_comparison,
 )
 from scrapers.leroy import scrape_leroy
-from scrapers.search_bridge import scrape_mercado_livre_bridge
+from scrapers.shopee import scrape_shopee
+from scrapers.search_bridge import (
+    scrape_comclick_bridge,
+    scrape_dufrio_bridge,
+    scrape_friolar_bridge,
+    scrape_gold_service_bridge,
+    scrape_mercado_livre_bridge,
+    scrape_mg_parts_bridge,
+    scrape_refrigeracao_mota_bridge,
+)
+from scrapers.specialty_stores import (
+    scrape_comclick,
+    scrape_dufrio,
+    scrape_friolar,
+    scrape_gold_service,
+    scrape_mg_parts,
+    scrape_refrigeracao_mota,
+)
 
 TARGET_STORES = [
     {
         "key": "mercado_livre",
         "label": "Mercado Livre",
         "scrapers": [
+            search_mercado_livre,
             scrape_mercado_livre_comparison,
             scrape_mercado_livre_bridge,
         ],
         "focused_scrapers": [
+            search_mercado_livre,
             scrape_mercado_livre_bridge,
         ],
     },
@@ -35,9 +61,11 @@ TARGET_STORES = [
         "key": "shopee",
         "label": "Shopee",
         "scrapers": [
+            scrape_shopee,
             scrape_shopee_comparison,
         ],
         "focused_scrapers": [
+            scrape_shopee,
             scrape_shopee_comparison,
         ],
     },
@@ -53,7 +81,8 @@ TARGET_STORES = [
     },
     {
         "key": "amazon",
-        "label": "Amazon",
+        "label": "Amazon Brasil",
+        "aliases": ["Amazon"],
         "scrapers": [
             scrape_amazon,
             scrape_amazon_comparison,
@@ -72,11 +101,164 @@ TARGET_STORES = [
             scrape_magalu_comparison,
         ],
     },
+    {
+        "key": "dufrio",
+        "label": "Dufrio",
+        "scrapers": [
+            scrape_dufrio,
+            scrape_dufrio_comparison,
+            scrape_dufrio_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_dufrio,
+            scrape_dufrio_bridge,
+        ],
+    },
+    {
+        "key": "friolar",
+        "label": "Friolar",
+        "scrapers": [
+            scrape_friolar,
+            scrape_friolar_comparison,
+            scrape_friolar_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_friolar,
+            scrape_friolar_bridge,
+        ],
+    },
+    {
+        "key": "refrigeracao_mota",
+        "label": "Refrigeração Mota",
+        "scrapers": [
+            scrape_refrigeracao_mota,
+            scrape_refrigeracao_mota_comparison,
+            scrape_refrigeracao_mota_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_refrigeracao_mota,
+            scrape_refrigeracao_mota_bridge,
+        ],
+    },
+    {
+        "key": "mg_parts",
+        "label": "MG Parts",
+        "scrapers": [
+            scrape_mg_parts,
+            scrape_mg_parts_comparison,
+            scrape_mg_parts_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_mg_parts,
+            scrape_mg_parts_bridge,
+        ],
+    },
+    {
+        "key": "gold_service",
+        "label": "Gold Service",
+        "scrapers": [
+            scrape_gold_service,
+            scrape_gold_service_comparison,
+            scrape_gold_service_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_gold_service,
+            scrape_gold_service_bridge,
+        ],
+    },
+    {
+        "key": "comclick",
+        "label": "ComClick",
+        "scrapers": [
+            scrape_comclick,
+            scrape_comclick_comparison,
+            scrape_comclick_bridge,
+        ],
+        "focused_scrapers": [
+            scrape_comclick,
+            scrape_comclick_bridge,
+        ],
+    },
 ]
 
 STORE_ITEM_LIMIT = 50
 TARGETED_CANDIDATE_LIMIT = 3
 CATALOG_ROW_LIMIT = 30
+
+KNOWN_SKUS = {
+    "W10866791",
+    "W10624070",
+    "W10510889",
+    "W10866790",
+    "W11298039",
+    "W11559186",
+    "W11393065",
+    "W10347201",
+    "W11387305",
+    "W10515645",
+    "W10581058",
+    "W11100357",
+    "W10866789",
+    "W10907728",
+    "W10894262",
+    "W11360276",
+    "W10287527",
+    "W10287547",
+    "W10585027",
+    "326075868",
+    "W11132264",
+    "W11393157",
+    "W10833267",
+    "W11619403",
+    "W11661613",
+    "W10320833",
+    "326043145",
+    "W10351342",
+    "W11433177",
+    "W10200101",
+    "W11300695",
+    "W10420716",
+    "W10638541",
+    "W11100356",
+    "W10758992",
+    "W11375406",
+    "W11619317",
+    "W10455522",
+    "W10169457",
+    "W10915770",
+    "W10476183",
+    "326075876",
+    "W10657521",
+    "W10638550",
+    "326073242",
+    "W11245249",
+    "W10544738",
+    "W10686098",
+    "W11109516",
+    "W10577330",
+    "W10705755",
+    "W10544750",
+    "W10644162",
+    "W10911678",
+    "W11228626",
+    "W10728409",
+    "326065620",
+    "W11525615",
+    "W10544749",
+    "W11108178",
+    "W11693441",
+    "326047477",
+    "W10911706",
+    "W10390580",
+    "W10516861",
+    "W11195523",
+    "W10238102",
+    "W10859619",
+    "W11185123",
+    "W10212150",
+    "W10336914",
+    "W11109236",
+}
 
 ELECTRONICS_TERMS = {
     "iphone",
@@ -120,6 +302,8 @@ ACCESSORY_TERMS = {
     "capa",
     "carregador",
     "case",
+    "capacitor",
+    "componentes",
     "controle",
     "estojo",
     "filtro",
@@ -127,12 +311,23 @@ ACCESSORY_TERMS = {
     "gaveta",
     "grade",
     "kit",
+    "lampada",
+    "mangueira",
+    "motor",
+    "painel",
     "pelicula",
     "peca",
     "pecas",
+    "placa",
     "prateleira",
     "refil",
+    "resistencia",
+    "sensor",
     "suporte",
+    "tampa",
+    "termostato",
+    "ventilador",
+    "ventoinha",
     "vidro",
 }
 
@@ -171,13 +366,23 @@ PRODUCT_STOP_WORDS = {
 
 STORE_WORDS = {
     "amazon",
+    "click",
+    "comclick",
+    "dufrio",
+    "friolar",
+    "gold",
     "livre",
     "loja",
     "magalu",
     "magazine",
     "mercado",
     "merlin",
+    "mg",
+    "mota",
+    "parts",
+    "refrigeracao",
     "leroy",
+    "service",
     "shopee",
 }
 
@@ -212,6 +417,18 @@ VARIANT_SCRAPERS = {
     "scrape_shopee_bridge",
     "scrape_shopee_comparison",
     "scrape_amazon_bridge",
+    "scrape_comclick_bridge",
+    "scrape_comclick_comparison",
+    "scrape_dufrio_bridge",
+    "scrape_dufrio_comparison",
+    "scrape_friolar_bridge",
+    "scrape_friolar_comparison",
+    "scrape_gold_service_bridge",
+    "scrape_gold_service_comparison",
+    "scrape_mg_parts_bridge",
+    "scrape_mg_parts_comparison",
+    "scrape_refrigeracao_mota_bridge",
+    "scrape_refrigeracao_mota_comparison",
 }
 
 
@@ -223,6 +440,36 @@ def _normalize_text(value):
 
 def _tokens(value):
     return set(re.findall(r"[a-z0-9]+", _normalize_text(value)))
+
+
+def _extract_skus(value):
+    normalized = _normalize_text(value).upper()
+    skus = re.findall(r"\bW\d{6,}\b|\b\d{8,}\b", normalized)
+    return list(dict.fromkeys(skus))
+
+
+def _primary_sku(value):
+    skus = _extract_skus(value)
+    return skus[0] if skus else None
+
+
+def _item_sku(item, fallback_query=None):
+    for value in (
+        item.get("sku"),
+        item.get("name"),
+        item.get("url"),
+        fallback_query,
+    ):
+        sku = _primary_sku(value or "")
+        if sku:
+            return sku
+    return None
+
+
+def _matches_query_sku(item, sku):
+    if not sku:
+        return True
+    return sku == _item_sku(item)
 
 
 def _query_variants(product_query):
@@ -260,6 +507,9 @@ def _is_accessory_mismatch(item, product_query):
 
 def _minimum_expected_price(product_query):
     query_tokens = _tokens(product_query)
+
+    if query_tokens.intersection(ACCESSORY_TERMS):
+        return 1
 
     if query_tokens.intersection(
         {
@@ -315,6 +565,9 @@ def _normalize_result(item, product_query, store_label=None):
     name = (item.get("name") or "").strip()
     url = (item.get("url") or "").strip()
     store = store_label or (item.get("store") or "").strip() or "Loja"
+    seller = (item.get("seller") or item.get("store") or store).strip()
+    source = (item.get("source") or store_label or store).strip()
+    sku = _item_sku(item, product_query)
 
     try:
         price = float(item.get("price"))
@@ -333,11 +586,13 @@ def _normalize_result(item, product_query, store_label=None):
     return {
         "name": name[:255],
         "price": price,
-        "store": store[:100],
+        "store": seller[:100],
+        "source": source[:100],
         "url": url[:1000],
         "brand": (item.get("brand") or store or "Oferta")[:100],
         "category": (item.get("category") or product_query)[:100],
         "image_url": item.get("image_url"),
+        "sku": sku,
     }
 
 
@@ -349,6 +604,7 @@ def _deduplicate(items):
     for item in items:
         url_key = item["url"].split("?")[0].rstrip("/")
         listing_key = (
+            _normalize_text(item.get("source") or item["store"]),
             _normalize_text(item["store"]),
             " ".join(sorted(_product_tokens(item["name"]))),
             round(item["price"], 2),
@@ -372,7 +628,9 @@ def _product_response(item, fallback_id):
         "image_url": item.get("image_url"),
         "current_price": item["price"],
         "store": item["store"],
+        "source": item.get("source") or item["store"],
         "url": item["url"],
+        "sku": item.get("sku"),
         "last_update": datetime.utcnow().isoformat(),
     }
 
@@ -472,9 +730,44 @@ def _same_product(cluster_tokens, item_tokens, query_tokens):
 def _build_comparison_rows(products, product_query):
     clusters = []
     query_tokens = _product_tokens(product_query)
+    query_sku = _primary_sku(product_query)
+    sku_products = [
+        product
+        for product in products
+        if _item_sku(product, product_query)
+        and (not query_sku or _item_sku(product, product_query) == query_sku)
+    ]
+    products_to_cluster = sku_products if sku_products else (
+        products if not query_sku else []
+    )
 
-    for product in products:
+    for product in products_to_cluster:
+        product_sku = _item_sku(product, product_query)
         item_tokens = _product_tokens(product["name"])
+
+        if product_sku:
+            item_tokens.discard(product_sku.lower())
+            target_cluster = None
+
+            for cluster in clusters:
+                if cluster.get("sku") != product_sku:
+                    continue
+                if _same_product(cluster["tokens"], item_tokens, query_tokens):
+                    target_cluster = cluster
+                    break
+
+            if not target_cluster:
+                target_cluster = {
+                    "sku": product_sku,
+                    "tokens": set(item_tokens),
+                    "offers": [],
+                }
+                clusters.append(target_cluster)
+
+            target_cluster["tokens"].update(item_tokens)
+            target_cluster["offers"].append(product)
+            continue
+
         target_cluster = None
 
         for cluster in clusters:
@@ -515,7 +808,12 @@ def _build_comparison_rows(products, product_query):
         rows.append(
             {
                 "id": index,
-                "name": cheapest["name"],
+                "sku": cluster.get("sku"),
+                "name": (
+                    f"{cluster['sku']} - {cheapest['name']}"
+                    if cluster.get("sku") and cluster["sku"] not in cheapest["name"].upper()
+                    else cheapest["name"]
+                ),
                 "store_count": len(store_offers),
                 "offer_count": len(offers),
                 "pma": round(pma, 2),
@@ -549,12 +847,17 @@ def _catalog_product_response(item, fallback_id):
         "image_url": item.get("image_url"),
         "current_price": item["price"],
         "store": item.get("best_store") or "Comparador",
+        "source": item.get("best_store") or "Comparador",
         "url": item["url"],
+        "sku": item.get("sku") or _primary_sku(item.get("name") or ""),
         "last_update": datetime.utcnow().isoformat(),
     }
 
 
 def _build_catalog_rows(product_query):
+    if _primary_sku(product_query):
+        return []
+
     rows = []
 
     for index, item in enumerate(scrape_target_catalog(product_query, limit=CATALOG_ROW_LIMIT), start=1):
@@ -599,6 +902,16 @@ def _build_catalog_rows(product_query):
 
 
 def _same_row_product(left, right, product_query):
+    left_sku = left.get("sku") or _primary_sku(left.get("name") or "")
+    right_sku = right.get("sku") or _primary_sku(right.get("name") or "")
+    query_sku = _primary_sku(product_query)
+
+    if query_sku:
+        return left_sku == query_sku and right_sku == query_sku
+
+    if left_sku and right_sku:
+        return left_sku == right_sku
+
     left_tokens = _product_tokens(left["name"])
     right_tokens = _product_tokens(right["name"])
     query_tokens = _product_tokens(product_query)
@@ -606,7 +919,7 @@ def _same_row_product(left, right, product_query):
     return _same_product(left_tokens, right_tokens, query_tokens)
 
 
-def _comparison_row_from_offers(row_id, name, offers):
+def _comparison_row_from_offers(row_id, name, offers, sku=None):
     valid_offers = sorted(
         [
             offer
@@ -633,6 +946,7 @@ def _comparison_row_from_offers(row_id, name, offers):
 
     return {
         "id": row_id,
+        "sku": sku or _primary_sku(name),
         "name": name,
         "store_count": len(store_offers),
         "offer_count": len(valid_offers),
@@ -671,6 +985,7 @@ def _merge_catalog_rows(actual_rows, catalog_rows, product_query):
                     actual_row["id"],
                     matching_catalog["name"],
                     [*actual_row["offers"], *matching_catalog["offers"]],
+                    actual_row.get("sku") or matching_catalog.get("sku"),
                 )
             )
         else:
@@ -739,6 +1054,9 @@ def _matches_candidate_product(item, candidate_query):
 
 
 def _catalog_candidate_queries(product_query):
+    if _primary_sku(product_query):
+        return []
+
     candidates = []
 
     for item in scrape_comparison_catalog(product_query, limit=10):
@@ -772,6 +1090,9 @@ def _catalog_candidate_queries(product_query):
 
 
 def _candidate_queries(products, product_query):
+    if _primary_sku(product_query):
+        return []
+
     rows = _build_comparison_rows(products, product_query)
     normalized_original = _normalize_text(product_query)
     query_tokens = _tokens(product_query)
@@ -816,10 +1137,17 @@ def _build_payloads(raw_by_store, product_query):
     store_payloads = []
     available_results = []
     response_id = 1
+    query_sku = _primary_sku(product_query)
 
     for store_config in TARGET_STORES:
         store_items = sorted(
-            _deduplicate(raw_by_store.get(store_config["key"], [])),
+            _deduplicate(
+                [
+                    item
+                    for item in raw_by_store.get(store_config["key"], [])
+                    if _matches_query_sku(item, query_sku)
+                ]
+            ),
             key=lambda item: _sort_key(item, product_query),
         )
         store_products = []
@@ -857,6 +1185,47 @@ def _build_payloads(raw_by_store, product_query):
     return available_results, store_payloads
 
 
+def build_summary_from_cached_results(available_results, product_query):
+    store_payloads = []
+
+    for store_config in TARGET_STORES:
+        source_names = {
+            _normalize_text(store_config["label"]),
+            *[
+                _normalize_text(alias)
+                for alias in store_config.get("aliases", [])
+            ],
+        }
+        store_products = sorted(
+            [
+                product
+                for product in available_results
+                if _normalize_text(product.get("source") or product.get("store"))
+                in source_names
+            ],
+            key=lambda product: product["current_price"],
+        )
+        best_product = store_products[0] if store_products else None
+
+        store_payloads.append(
+            {
+                "key": store_config["key"],
+                "label": store_config["label"],
+                "available": bool(best_product),
+                "message": None if best_product else "Não disponível",
+                "product": best_product,
+                "products": store_products,
+            }
+        )
+
+    return {
+        "processed_count": 0,
+        "results": available_results,
+        "stores": store_payloads,
+        "comparison": _build_comparison_rows(available_results, product_query),
+    }
+
+
 def _save_result(item, db: Session):
     existing_price = (
         db.query(PriceHistory)
@@ -871,6 +1240,7 @@ def _save_result(item, db: Session):
             brand=item["brand"],
             category=item["category"],
             image_url=item["image_url"],
+            sku=item.get("sku"),
         )
         db.add(new_product)
         db.commit()
@@ -880,6 +1250,7 @@ def _save_result(item, db: Session):
             product_id=new_product.id,
             price=item["price"],
             store=item["store"],
+            source=item.get("source") or item["store"],
             url=item["url"],
         )
         db.add(new_price)
@@ -891,12 +1262,19 @@ def _save_result(item, db: Session):
         product.brand = item["brand"]
         product.category = item["category"]
         product.image_url = item["image_url"] or product.image_url
+        product.sku = item.get("sku") or product.sku
 
-    if existing_price.price != item["price"] or existing_price.store != item["store"]:
+    source = item.get("source") or item["store"]
+    if (
+        existing_price.price != item["price"]
+        or existing_price.store != item["store"]
+        or existing_price.source != source
+    ):
         new_price = PriceHistory(
             product_id=existing_price.product_id,
             price=item["price"],
             store=item["store"],
+            source=source,
             url=item["url"],
         )
         db.add(new_price)
@@ -1014,10 +1392,12 @@ def run_all_scrapers(product_query: str, db: Session):
             "name": item["name"],
             "price": item["current_price"],
             "store": item["store"],
+            "source": item.get("source") or item["store"],
             "url": item["url"],
             "brand": item["brand"],
             "category": item["category"],
             "image_url": item.get("image_url"),
+            "sku": item.get("sku"),
         }
         try:
             processed_count += _save_result(storage_item, db)

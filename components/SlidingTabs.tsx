@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
+  ChartLine,
   ChevronDown,
   ChevronUp,
   ExternalLink,
   ImageIcon,
+  Images,
+  Package,
   ShoppingBag,
-  Store,
-  TrendingDown,
-  TrendingUp,
-  Trophy,
+  Tag,
 } from "lucide-react";
 import type { ComparisonRow, Product } from "../models/product.model";
 import { PriceChart } from "./PriceChart";
@@ -18,19 +20,24 @@ interface SlidingTabsProps {
   onTabChange: (tab: number) => void;
   loading: boolean;
   products: Product[];
-  unavailableStoreCount: number;
   comparisonRows: ComparisonRow[];
 }
 
 const LIST_STEP = 15;
 const CARD_STEP = 10;
-const BRAND_FILTERS = ["Consul", "Brastemp"];
+const BRAND_FILTERS = ["Consul", "Brastemp", "Whirlpool"];
 const STORE_FILTERS = [
   { label: "Mercado Livre", aliases: ["mercado livre", "meli"] },
-  { label: "Magalu", aliases: ["magalu", "magazine luiza"] },
-  { label: "Amazon", aliases: ["amazon"] },
-  { label: "Leroy", aliases: ["leroy", "leroy merlin"] },
+  { label: "Magazine Luiza", aliases: ["magazine luiza", "magalu"] },
+  { label: "Amazon Brasil", aliases: ["amazon brasil", "amazon"] },
+  { label: "Leroy Merlin", aliases: ["leroy merlin", "leroy"] },
   { label: "Shopee", aliases: ["shopee"] },
+  { label: "Dufrio", aliases: ["dufrio"] },
+  { label: "Friolar", aliases: ["friolar", "friolar peças", "friolar pecas"] },
+  { label: "Refrigeração Mota", aliases: ["refrigeração mota", "refrigeracao mota"] },
+  { label: "MG Parts", aliases: ["mg parts", "mgparts"] },
+  { label: "Gold Service", aliases: ["gold service", "goldservice"] },
+  { label: "ComClick", aliases: ["comclick", "com click"] },
 ];
 const PRODUCT_STOP_WORDS = new Set([
   "a",
@@ -50,12 +57,22 @@ const PRODUCT_STOP_WORDS = new Set([
 ]);
 const STORE_WORDS = new Set([
   "amazon",
+  "click",
+  "comclick",
+  "dufrio",
+  "friolar",
+  "gold",
   "leroy",
   "magalu",
   "magazine",
   "mercado",
   "livre",
   "meli",
+  "mg",
+  "mota",
+  "parts",
+  "refrigeracao",
+  "service",
   "shopee",
 ]);
 const ACCESSORY_TERMS = new Set([
@@ -67,6 +84,8 @@ const ACCESSORY_TERMS = new Set([
   "capa",
   "carregador",
   "case",
+  "capacitor",
+  "componentes",
   "controle",
   "estojo",
   "filtro",
@@ -74,12 +93,23 @@ const ACCESSORY_TERMS = new Set([
   "gaveta",
   "grade",
   "kit",
+  "lampada",
+  "mangueira",
+  "motor",
+  "painel",
   "pelicula",
   "peca",
   "pecas",
+  "placa",
   "prateleira",
   "refil",
+  "resistencia",
+  "sensor",
   "suporte",
+  "tampa",
+  "termostato",
+  "ventilador",
+  "ventoinha",
   "vidro",
 ]);
 const KNOWN_BRANDS = new Set([
@@ -101,15 +131,38 @@ const KNOWN_BRANDS = new Set([
   "shop",
 ]);
 const navigationTabs = [
-  { label: "Ranking", icon: Trophy },
-  { label: "Marketplace", icon: Store },
+  { label: "Produtos", icon: Package },
+  { label: "Design", icon: Images },
 ];
 type SortOrder = "price_asc" | "price_desc" | "stores_desc";
+type StoreRankingState = {
+  row: ComparisonRow;
+  left: number;
+  top: number;
+};
+type DashboardPriceColumn = {
+  label: string;
+  aliases: string[];
+};
 
 const SORT_OPTIONS: Array<{ label: string; value: SortOrder }> = [
   { label: "Menor preço", value: "price_asc" },
   { label: "Maior preço", value: "price_desc" },
   { label: "Mais lojas", value: "stores_desc" },
+];
+
+const DASHBOARD_PRICE_COLUMNS: DashboardPriceColumn[] = [
+  { label: "Meli", aliases: ["mercado livre", "meli", "-ml", "mlb"] },
+  { label: "Amazon", aliases: ["amazon brasil", "amazon"] },
+  { label: "Shopee", aliases: ["shopee"] },
+  { label: "Magalu", aliases: ["magazine luiza", "magalu"] },
+  { label: "Leroy", aliases: ["leroy merlin", "leroy"] },
+  { label: "Dufrio", aliases: ["dufrio"] },
+  { label: "Friolar", aliases: ["friolar"] },
+  { label: "Mota", aliases: ["refrigeração mota", "refrigeracao mota"] },
+  { label: "MG Parts", aliases: ["mg parts", "mgparts"] },
+  { label: "Gold Service", aliases: ["gold service", "goldservice"] },
+  { label: "ComClick", aliases: ["comclick", "com click"] },
 ];
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -130,6 +183,14 @@ const cardCurrencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 const formatCardCurrency = (value: number) =>
   cardCurrencyFormatter.format(value || 0);
+
+const rankingPriceFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const formatRankingPrice = (value: number) =>
+  rankingPriceFormatter.format(value || 0);
 
 const truncateText = (value: string, maxLength = 86) =>
   value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
@@ -265,15 +326,39 @@ const bestOfferByStore = (offers: Product[]) => {
   );
 };
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const detectBrandInText = (value?: string | null) => {
+  const text = normalizeText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const matches = BRAND_FILTERS.map((brand) => {
+    const normalizedBrand = normalizeText(brand);
+    const match = text.match(new RegExp(`\\b${escapeRegExp(normalizedBrand)}\\b`));
+
+    return match?.index === undefined ? null : { brand, index: match.index };
+  }).filter((match): match is { brand: string; index: number } =>
+    Boolean(match),
+  );
+
+  return matches.sort((a, b) => a.index - b.index)[0]?.brand || null;
+};
+
+const detectProductBrand = (product: Pick<Product, "name" | "brand">) =>
+  detectBrandInText(product.name) || detectBrandInText(product.brand);
+
 const productMatchesBrand = (product: Product, selectedBrands: string[]) => {
   if (selectedBrands.length === 0) {
     return true;
   }
 
-  const searchable = normalizeText(`${product.name} ${product.brand || ""}`);
-  return selectedBrands.some((brand) =>
-    searchable.includes(normalizeText(brand)),
-  );
+  const productBrand = detectProductBrand(product);
+
+  return productBrand ? selectedBrands.includes(productBrand) : false;
 };
 
 const productMatchesStore = (product: Product, selectedStores: string[]) => {
@@ -281,12 +366,64 @@ const productMatchesStore = (product: Product, selectedStores: string[]) => {
     return true;
   }
 
-  const storeName = normalizeText(product.store);
+  const storeName = normalizeText(`${product.source || ""} ${product.store}`);
   return selectedStores.some((store) => {
     const filter = STORE_FILTERS.find((item) => item.label === store);
     const aliases = filter?.aliases || [store];
     return aliases.some((alias) => storeName.includes(normalizeText(alias)));
   });
+};
+
+const getProductBrand = (row: ComparisonRow) => {
+  const brands = (row.offers || [])
+    .map((offer) => detectProductBrand(offer))
+    .filter((brand): brand is string => Boolean(brand));
+
+  return brands[0] || detectBrandInText(row.name) || "-";
+};
+
+const getRowSku = (row: ComparisonRow) => {
+  const skuFromOffer = row.offers?.find((offer) => offer.sku)?.sku;
+  const skuFromName = row.name.match(/\b(?:W\d{6,}|3\d{8})\b/i)?.[0];
+
+  return row.sku || skuFromOffer || skuFromName || "-";
+};
+
+const getDashboardDescription = (row: ComparisonRow) => {
+  const sku = getRowSku(row);
+  const cleanedName = row.name
+    .replace(new RegExp(`\\b${sku}\\b`, "i"), "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return truncateText(cleanedName || row.name, 54);
+};
+
+const productMatchesDashboardColumn = (
+  product: Product,
+  column: DashboardPriceColumn,
+) => {
+  const searchable = normalizeText(
+    `${product.source || ""} ${product.store || ""} ${product.url || ""}`,
+  );
+
+  return column.aliases.some((alias) => searchable.includes(normalizeText(alias)));
+};
+
+const getDashboardPriceByColumn = (
+  products: Product[],
+  column: DashboardPriceColumn,
+) => {
+  const prices = products
+    .filter((product) => productMatchesDashboardColumn(product, column))
+    .map((product) => Number(product.current_price))
+    .filter((price) => price > 0 && !Number.isNaN(price));
+
+  if (prices.length === 0) {
+    return null;
+  }
+
+  return Math.min(...prices);
 };
 
 const rebuildRowWithOffers = (
@@ -324,25 +461,38 @@ const rebuildRowWithOffers = (
   };
 };
 
-const formatSignedCurrency = (value: number) => {
-  const formatted = formatCurrency(Math.abs(value));
+const splitRowsByBrand = (rows: ComparisonRow[]) =>
+  rows.flatMap((row) => {
+    const offers = row.offers || [];
 
-  if (value < 0) {
-    return `-${formatted}`;
-  }
+    if (offers.length === 0) {
+      return [row];
+    }
 
-  if (value > 0) {
-    return formatted;
-  }
+    const offersByBrand = new Map<string, Product[]>();
 
-  return formatCurrency(0);
-};
+    offers.forEach((offer) => {
+      const brandKey = detectProductBrand(offer) || "Sem marca";
+      const currentOffers = offersByBrand.get(brandKey) || [];
+      offersByBrand.set(brandKey, [...currentOffers, offer]);
+    });
 
-const formatPercent = (value: number) =>
-  `${Math.round(Math.abs(value || 0))}%`;
+    if (offersByBrand.size <= 1) {
+      return [row];
+    }
 
-const formatUnavailableStores = (count: number) =>
-  `${count} ${count === 1 ? "loja" : "lojas"} sem disponibilidade`;
+    return [...offersByBrand.values()]
+      .map((brandOffers, index) =>
+        rebuildRowWithOffers(
+          {
+            ...row,
+            id: row.id * 100 + index + 1,
+          },
+          brandOffers,
+        ),
+      )
+      .filter((brandRow): brandRow is ComparisonRow => Boolean(brandRow));
+  });
 
 const rowToneClass = (row: ComparisonRow) =>
   Math.abs(row.difference_value) < 100
@@ -444,48 +594,99 @@ const sortProducts = (products: Product[], sortOrder: SortOrder) => {
 
 const TableHeader = () => (
   <thead>
-    <tr className="bg-neutral-800 text-left text-xs font-semibold text-white">
-      <th className="w-[40%] px-6 py-4">Produto</th>
-      <th className="w-[10%] px-5 py-4 text-center">Lojas</th>
-      <th className="w-[14%] px-5 py-4 text-right">Preço sugerido</th>
-      <th className="w-[14%] px-5 py-4 text-center">Mais barato</th>
-      <th className="w-[18%] px-5 py-4 text-center">Diferença</th>
-      <th className="sticky right-0 z-20 w-[72px] bg-neutral-800 px-4 py-4" />
+    <tr className="bg-neutral-200 text-left text-sm font-semibold text-neutral-800">
+      <th className="w-[11%] px-6 py-4">Marca</th>
+      <th className="w-[37%] px-5 py-4">Produto</th>
+      <th className="w-[11%] px-5 py-4 text-center">Lojas</th>
+      <th className="w-[17%] px-5 py-4 text-center">Preço sugerido</th>
+      <th className="w-[16%] px-5 py-4 text-center">Mais barato</th>
+      <th className="sticky right-0 z-20 w-[72px] bg-neutral-200 px-4 py-4" />
     </tr>
   </thead>
 );
 
-const EyeIcon = () => (
-  <svg
-    aria-hidden="true"
-    fill="none"
-    height="28"
-    style={{
-      color: "#000000",
-      display: "block",
-      opacity: 1,
-      visibility: "visible",
-    }}
-    viewBox="0 0 24 24"
-    width="28"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
-      stroke="#000000"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.4"
-    />
-    <circle
-      cx="12"
-      cy="12"
-      r="3"
-      fill="#000000"
-      stroke="#000000"
-      strokeWidth="2"
-    />
-  </svg>
+const StoreRankingPreview = ({
+  row,
+  left,
+  top,
+}: {
+  row: ComparisonRow;
+  left: number;
+  top: number;
+}) => {
+  const topOffers = bestOfferByStore(row.offers || []).slice(0, 10);
+
+  if (topOffers.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none fixed z-50 w-[410px] overflow-hidden rounded-sm border border-neutral-200 bg-white text-left shadow-[0_18px_38px_rgba(0,0,0,0.18)]"
+      style={{ left, top, transform: "translateX(-50%)" }}
+    >
+      {topOffers.map((offer, index) => (
+        <div
+          key={`${offer.store}-${offer.url}-${index}`}
+          className={`grid grid-cols-[54px_1fr_92px] items-center gap-3 px-4 py-2.5 text-xs ${
+            index % 2 === 0 ? "bg-white" : "bg-neutral-50"
+          } ${index > 0 ? "border-t border-neutral-200" : ""}`}
+        >
+          <span className="text-center font-semibold text-sky-900">
+            {index + 1}º
+          </span>
+          <span className="min-w-0 truncate font-normal text-sky-900">
+            {offer.store}
+          </span>
+          <span className="rounded bg-neutral-500 px-3 py-1 text-center font-normal text-white">
+            {formatRankingPrice(offer.current_price)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const DashboardPriceTable = ({ row }: { row: ComparisonRow }) => (
+  <div className="mt-5 overflow-hidden rounded-md border border-neutral-200 bg-white">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left">
+        <thead>
+          <tr className="bg-neutral-200 text-xs font-semibold text-neutral-800">
+            <th className="w-[12%] px-4 py-3">Material</th>
+            <th className="w-[22%] px-4 py-3">Descrição</th>
+            {DASHBOARD_PRICE_COLUMNS.map((column) => (
+              <th key={column.label} className="px-3 py-3 text-center">
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="bg-white text-xs text-neutral-700">
+            <td className="px-4 py-4 font-semibold text-neutral-900">
+              {getRowSku(row)}
+            </td>
+            <td className="px-4 py-4 text-neutral-800">
+              {getDashboardDescription(row)}
+            </td>
+            {DASHBOARD_PRICE_COLUMNS.map((column) => {
+              const price = getDashboardPriceByColumn(row.offers || [], column);
+
+              return (
+                <td
+                  key={column.label}
+                  className="whitespace-nowrap px-3 py-4 text-center font-semibold text-neutral-800"
+                >
+                  {price === null ? "-" : formatCurrency(price)}
+                </td>
+              );
+            })}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 );
 
 const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
@@ -499,27 +700,11 @@ const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-const DifferenceBadge = ({ row }: { row: ComparisonRow }) => {
-  const isNegative = row.difference_value < 0;
-  const Icon = isNegative ? TrendingDown : TrendingUp;
-
-  return (
-    <div
-      className={`inline-flex min-w-[178px] items-center justify-center gap-2 whitespace-nowrap rounded px-3 py-2 text-sm font-black leading-none text-white ${rowToneClass(row)}`}
-    >
-      <span>{formatSignedCurrency(row.difference_value)}</span>
-      <Icon size={16} className="shrink-0" />
-      <span>{formatPercent(row.difference_percent)}</span>
-    </div>
-  );
-};
-
 export default function SlidingTabs({
   activeTab,
   onTabChange,
   loading,
   products,
-  unavailableStoreCount,
   comparisonRows,
 }: SlidingTabsProps) {
   const [visibleRows, setVisibleRows] = useState(LIST_STEP);
@@ -529,13 +714,24 @@ export default function SlidingTabs({
   const [sortOrder, setSortOrder] = useState<SortOrder>("stores_desc");
   const [sortOpen, setSortOpen] = useState(false);
   const [dashboardRow, setDashboardRow] = useState<ComparisonRow | null>(null);
+  const [storeRanking, setStoreRanking] = useState<StoreRankingState | null>(
+    null,
+  );
+  const [expandedFilters, setExpandedFilters] = useState({
+    brands: true,
+    stores: true,
+  });
   const sortRef = useRef<HTMLDivElement>(null);
 
   const rows = useMemo(
-    () =>
-      comparisonRows.length > 0
-        ? comparisonRows
-        : buildComparisonRows(products),
+    () => {
+      const sourceRows =
+        comparisonRows.length > 0
+          ? comparisonRows
+          : buildComparisonRows(products);
+
+      return splitRowsByBrand(sourceRows);
+    },
     [comparisonRows, products],
   );
 
@@ -543,10 +739,12 @@ export default function SlidingTabs({
     setSortOrder("stores_desc");
     setSortOpen(false);
     setDashboardRow(null);
+    setStoreRanking(null);
   }, [products]);
 
   useEffect(() => {
     setDashboardRow(null);
+    setStoreRanking(null);
   }, [activeTab]);
 
   useEffect(() => {
@@ -646,6 +844,39 @@ export default function SlidingTabs({
     setSortOpen(false);
   };
 
+  const toggleFilterSection = (section: "brands" | "stores") => {
+    setExpandedFilters((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  };
+
+  const showStoreRanking = (
+    row: ComparisonRow,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const panelWidth = 410;
+    const panelHeight = Math.min(
+      392,
+      Math.max(70, bestOfferByStore(row.offers || []).slice(0, 10).length * 38),
+    );
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2, panelWidth / 2 + 16),
+      window.innerWidth - panelWidth / 2 - 16,
+    );
+    const fitsBelow = rect.bottom + panelHeight + 14 < window.innerHeight;
+    const top = fitsBelow
+      ? rect.bottom + 8
+      : Math.max(96, rect.top - panelHeight - 8);
+
+    setStoreRanking({ row, left, top });
+  };
+
+  const hideStoreRanking = () => {
+    setStoreRanking(null);
+  };
+
   return (
     <div className="w-full">
       <div className="flex w-full items-start gap-6 pl-5 text-left">
@@ -654,112 +885,172 @@ export default function SlidingTabs({
 
           <div className="space-y-3 px-3">
             <section>
-              <h3 className="text-sm font-bold text-black">Marca</h3>
-              <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-                {BRAND_FILTERS.map((brand, index) => (
-                  <button
-                    key={brand}
-                    type="button"
-                    onClick={() => toggleBrandFilter(brand)}
-                    className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-2 text-left text-sm font-semibold text-black transition-colors hover:!bg-neutral-50 ${
-                      index > 0 ? "border-t border-neutral-100" : ""
-                    }`}
-                  >
-                    <span>{brand}</span>
-                    <span
-                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
-                        selectedBrands.includes(brand)
-                          ? "bg-black"
-                          : "bg-neutral-300"
+              <button
+                type="button"
+                onClick={() => toggleFilterSection("brands")}
+                className="flex w-full items-center justify-between border-0 !bg-transparent p-0 text-left hover:!bg-transparent"
+                aria-expanded={expandedFilters.brands}
+              >
+                <h3 className="text-sm font-bold text-black">Marcas</h3>
+                {expandedFilters.brands ? (
+                  <ChevronUp size={17} className="text-neutral-600" />
+                ) : (
+                  <ChevronDown size={17} className="text-neutral-600" />
+                )}
+              </button>
+              {expandedFilters.brands && (
+                <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+                  {BRAND_FILTERS.map((brand, index) => (
+                    <button
+                      key={brand}
+                      type="button"
+                      onClick={() => toggleBrandFilter(brand)}
+                      className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-1 text-left font-normal text-black transition-colors hover:!bg-neutral-50 ${
+                        index > 0 ? "border-t border-neutral-100" : ""
                       }`}
+                      style={{ fontSize: "13px", lineHeight: "18px" }}
                     >
+                      <span className="min-w-0 truncate pb-px">{brand}</span>
                       <span
-                        className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                        className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
                           selectedBrands.includes(brand)
-                            ? "translate-x-5"
-                            : "translate-x-0"
+                            ? "bg-black"
+                            : "bg-neutral-300"
                         }`}
-                      />
-                    </span>
-                  </button>
-                ))}
-              </div>
+                      >
+                        <span
+                          className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                            selectedBrands.includes(brand)
+                              ? "translate-x-5"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section>
-              <h3 className="text-sm font-bold text-black">Loja</h3>
-              <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-                {STORE_FILTERS.map((store, index) => (
-                  <button
-                    key={store.label}
-                    type="button"
-                    onClick={() => toggleStoreFilter(store.label)}
-                    className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-2 text-left text-sm font-semibold text-black transition-colors hover:!bg-neutral-50 ${
-                      index > 0 ? "border-t border-neutral-100" : ""
-                    }`}
-                  >
-                    <span>{store.label}</span>
-                    <span
-                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
-                        selectedStores.includes(store.label)
-                          ? "bg-black"
-                          : "bg-neutral-300"
+              <button
+                type="button"
+                onClick={() => toggleFilterSection("stores")}
+                className="flex w-full items-center justify-between border-0 !bg-transparent p-0 text-left hover:!bg-transparent"
+                aria-expanded={expandedFilters.stores}
+              >
+                <h3 className="text-sm font-bold text-black">Lojas</h3>
+                {expandedFilters.stores ? (
+                  <ChevronUp size={17} className="text-neutral-600" />
+                ) : (
+                  <ChevronDown size={17} className="text-neutral-600" />
+                )}
+              </button>
+              {expandedFilters.stores && (
+                <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+                  {STORE_FILTERS.map((store, index) => (
+                    <button
+                      key={store.label}
+                      type="button"
+                      onClick={() => toggleStoreFilter(store.label)}
+                      className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-1 text-left font-normal text-black transition-colors hover:!bg-neutral-50 ${
+                        index > 0 ? "border-t border-neutral-100" : ""
                       }`}
+                      style={{ fontSize: "13px", lineHeight: "18px" }}
                     >
+                      <span className="min-w-0 truncate pb-px">
+                        {store.label}
+                      </span>
                       <span
-                        className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                        className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
                           selectedStores.includes(store.label)
-                            ? "translate-x-5"
-                            : "translate-x-0"
+                            ? "bg-black"
+                            : "bg-neutral-300"
                         }`}
-                      />
-                    </span>
-                  </button>
-                ))}
-              </div>
+                      >
+                        <span
+                          className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
+                            selectedStores.includes(store.label)
+                              ? "translate-x-5"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1 pr-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm font-normal text-neutral-700">
-              <span className="font-semibold text-black">Mostrando:</span>{" "}
-              <span>{displayedOfferCount} ofertas</span>,{" "}
-              <span>{displayedProductCount} produtos</span>,{" "}
-              <span>{formatUnavailableStores(unavailableStoreCount)}</span>
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-normal text-neutral-700">
+              <span className="font-semibold text-black">Mostrando:</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Tag size={16} strokeWidth={2.2} className="text-neutral-700" />
+                <span>{displayedOfferCount} ofertas</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Package
+                  size={16}
+                  strokeWidth={2.2}
+                  className="text-neutral-700"
+                />
+                <span>{displayedProductCount} produtos</span>
+              </span>
             </p>
 
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="relative" ref={sortRef}>
+              <div className="relative shrink-0" ref={sortRef}>
                 <button
                   type="button"
                   onClick={() => setSortOpen((current) => !current)}
-                  className="flex h-7 items-center gap-1 border-0 !bg-transparent px-0 py-0 text-[10px] font-normal text-black hover:!bg-transparent"
+                  className="inline-flex h-6 flex-none items-center justify-end gap-1 overflow-visible whitespace-nowrap border-0 !bg-transparent px-0 py-0 font-normal text-black hover:!bg-transparent"
                   aria-expanded={sortOpen}
+                  style={{
+                    fontSize: "14px",
+                    lineHeight: 1,
+                    whiteSpace: "nowrap",
+                    wordBreak: "keep-all",
+                  }}
                 >
-                  <span>{sortLabel}</span>
+                  <span
+                    className="inline-block whitespace-nowrap leading-none"
+                    style={{ whiteSpace: "nowrap", wordBreak: "keep-all" }}
+                  >
+                    {sortLabel}
+                  </span>
                   {sortOpen ? (
-                    <ChevronUp size={16} className="text-blue-500" />
+                    <ChevronUp size={13} className="shrink-0 text-blue-500" />
                   ) : (
-                    <ChevronDown size={16} className="text-blue-500" />
+                    <ChevronDown size={13} className="shrink-0 text-blue-500" />
                   )}
                 </button>
 
                 {sortOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-40 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+                  <div className="absolute right-0 top-full z-20 mt-2 w-[168px] overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
                     {SORT_OPTIONS.map((option) => (
                       <button
                         key={option.value}
                         type="button"
                         onClick={() => selectSortOrder(option.value)}
-                        className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition-colors hover:!bg-neutral-100 ${
+                        className={`flex w-full items-center justify-between whitespace-nowrap px-2.5 py-1 text-left transition-colors hover:!bg-neutral-100 ${
                           sortOrder === option.value
                             ? "!bg-neutral-100 font-semibold text-black"
                             : "!bg-white font-normal text-neutral-700"
                         }`}
+                        style={{
+                          fontSize: "14px",
+                          lineHeight: 1.2,
+                          whiteSpace: "nowrap",
+                          wordBreak: "keep-all",
+                        }}
                       >
-                        {option.label}
+                        <span className="whitespace-nowrap">
+                          {option.label}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -797,7 +1088,7 @@ export default function SlidingTabs({
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-slate-500">
-                        Dashboard do item
+                        Dashboard
                       </p>
                       <h3
                         className="truncate text-base font-semibold text-black"
@@ -821,12 +1112,13 @@ export default function SlidingTabs({
                     </button>
                   </div>
                   <PriceChart products={dashboardRow.offers} />
+                  <DashboardPriceTable row={dashboardRow} />
                 </div>
               ) : (
                 <>
                 <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-slate-900">
                   <div className="w-full overflow-x-auto">
-                    <table className="w-full min-w-[1260px] table-fixed border-separate border-spacing-0">
+                    <table className="w-full min-w-[1240px] table-fixed border-separate border-spacing-0">
                       <TableHeader />
                       <tbody>
                         {filteredRows.length > 0 && !loading ? (
@@ -837,7 +1129,12 @@ export default function SlidingTabs({
                                 index % 2 === 0 ? "bg-white" : "bg-slate-50"
                               }
                             >
-                              <td className="w-[40%] px-6 py-4 text-left align-middle">
+                              <td className="px-6 py-4 text-left align-middle">
+                                <span className="inline-flex rounded-sm bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                                  {getProductBrand(row)}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-left align-middle">
                                 <p
                                   className="min-w-0 max-w-[580px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-normal leading-snug text-slate-800"
                                   title={row.name}
@@ -846,18 +1143,26 @@ export default function SlidingTabs({
                                 </p>
                               </td>
                               <td className="px-5 py-4 text-center align-middle">
-                                <div className="inline-flex min-w-[92px] items-center justify-center gap-2 text-sm font-black text-slate-800">
-                                  <span>{row.store_count}</span>
-                                  <ShoppingBag
-                                    size={16}
-                                    className="text-slate-500"
-                                  />
+                                <div
+                                  className="inline-flex flex-col items-center"
+                                  onMouseEnter={(event) =>
+                                    showStoreRanking(row, event)
+                                  }
+                                  onMouseLeave={hideStoreRanking}
+                                >
+                                  <div className="inline-flex min-w-[92px] items-center justify-center gap-2 text-sm font-black text-slate-800">
+                                    <span>{row.store_count}</span>
+                                    <ShoppingBag
+                                      size={16}
+                                      className="text-slate-500"
+                                    />
+                                  </div>
+                                  <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-slate-500">
+                                    {row.store_count} lojas
+                                  </p>
                                 </div>
-                                <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-slate-500">
-                                  {row.store_count} lojas
-                                </p>
                               </td>
-                              <td className="whitespace-nowrap px-5 py-4 text-right align-middle text-sm font-normal text-slate-700">
+                              <td className="whitespace-nowrap px-5 py-4 text-center align-middle text-sm font-normal text-slate-700">
                                 {formatCurrency(row.pma)}
                               </td>
                               <td className="px-5 py-4 text-center align-middle">
@@ -865,20 +1170,17 @@ export default function SlidingTabs({
                                   href={row.cheapest_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`inline-flex min-w-[128px] items-center justify-center gap-2 rounded px-3 py-2 text-sm font-black leading-none text-white ${rowToneClass(row)}`}
+                                  className={`inline-flex min-w-[128px] items-center justify-center gap-2 rounded px-3 py-2 text-sm font-black leading-none !text-white ${rowToneClass(row)}`}
                                 >
                                   {formatCurrency(row.cheapest_price)}
                                   <ExternalLink
                                     size={14}
-                                    className="shrink-0"
+                                    className="shrink-0 text-white"
                                   />
                                 </a>
-                                <p className="mt-1 max-w-[160px] truncate text-[11px] font-semibold text-slate-500">
+                                <p className="mx-auto mt-1 max-w-[160px] truncate text-center text-[11px] font-semibold text-slate-500">
                                   {row.cheapest_store}
                                 </p>
-                              </td>
-                              <td className="whitespace-nowrap px-5 py-4 text-center align-middle">
-                                <DifferenceBadge row={row} />
                               </td>
                               <td
                                 className={`sticky right-0 z-10 w-[72px] px-4 py-4 text-center align-middle ${
@@ -889,15 +1191,18 @@ export default function SlidingTabs({
                                   type="button"
                                   aria-label="Abrir dashboard do item"
                                   onClick={() => setDashboardRow(row)}
-                                  className="mx-auto flex h-10 w-10 items-center justify-center border-0 !bg-transparent p-0 text-black opacity-100 transition-opacity hover:!bg-transparent hover:opacity-70"
+                                  className="mx-auto flex h-10 w-10 items-center justify-center border-0 !bg-transparent p-0 text-neutral-700 opacity-100 transition-colors hover:!bg-transparent hover:text-neutral-900"
                                   style={{
                                     background: "transparent",
                                     border: 0,
-                                    color: "#000000",
                                     padding: 0,
                                   }}
                                 >
-                                  <EyeIcon />
+                                  <ChartLine
+                                    size={22}
+                                    strokeWidth={2.3}
+                                    className="text-current"
+                                  />
                                 </button>
                               </td>
                             </tr>
@@ -997,6 +1302,15 @@ export default function SlidingTabs({
 
         </div>
       </div>
+      {storeRanking &&
+        createPortal(
+          <StoreRankingPreview
+            row={storeRanking.row}
+            left={storeRanking.left}
+            top={storeRanking.top}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

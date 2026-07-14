@@ -6,6 +6,7 @@ class PriceHistoryCreate(BaseModel):
     price: float
     store: str
     url: str
+    source: Optional[str] = None
 
 class ProductCreate(BaseModel):
     name: str
@@ -13,5 +14,6 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     category: str
     image_url: Optional[str] = None
+    sku: Optional[str] = None
 
     initial_price: PriceHistoryCreate

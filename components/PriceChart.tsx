@@ -48,11 +48,11 @@ export const PriceChart = ({ products }: PriceChartProps) => {
   }
 
   return (
-    <div className="h-[380px] w-full overflow-hidden rounded-md bg-white px-3 py-4">
+    <div className="h-[430px] w-full overflow-hidden rounded-md bg-white px-3 py-4">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
-          margin={{ top: 18, right: 26, left: 16, bottom: 38 }}
+          margin={{ top: 18, right: 26, left: 16, bottom: 88 }}
         >
           <CartesianGrid
             stroke="#e5e7eb"
@@ -65,7 +65,11 @@ export const PriceChart = ({ products }: PriceChartProps) => {
             tickLine={false}
             interval={0}
             minTickGap={8}
-            tick={{ fill: "#1f2937", fontSize: 12, fontWeight: 600 }}
+            angle={-35}
+            textAnchor="end"
+            tick={{ fill: "#1f2937", fontSize: 11, fontWeight: 600 }}
+            tickMargin={16}
+            height={92}
           />
           <YAxis
             axisLine={false}

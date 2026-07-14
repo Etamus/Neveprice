@@ -3,8 +3,10 @@ export interface Product {
   name: string;
   brand: string;
   category: string;
+  sku?: string | null;
   current_price: number;
   store: string;
+  source?: string | null;
   url: string;
   image_url?: string | null;
   last_update: string; // ISO Date string vinda do backend
@@ -23,6 +25,7 @@ export interface StoreSearchResult {
 export interface ComparisonRow {
   id: number;
   name: string;
+  sku?: string | null;
   store_count: number;
   offer_count: number;
   pma: number;
