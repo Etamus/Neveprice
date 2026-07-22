@@ -1,80 +1,106 @@
 @import "tailwindcss";
 
 @theme {
-  --animate-fade-in-delay: fade-in 0.7s ease-out 0.2s forwards;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  --animate-fade-in: fade-in 0.35s ease-out both;
 }
 
 :root {
-  --background: 210 48% 90%;
-  --foreground: 222 47% 11%;
-
-  font-family: "Segoe UI", Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --app-bg: #f3f8fa;
+  --app-surface: #ffffff;
+  --app-surface-soft: #eef7fa;
+  --app-surface-strong: #deedf2;
+  --app-border: #d4e3e8;
+  --app-border-strong: #b9ccd3;
+  --app-ink: #132126;
+  --app-muted: #5e7178;
+  --app-subtle: #8598a0;
+  --app-accent: #0e7490;
+  --app-accent-strong: #155e75;
+  --app-accent-soft: #dff5fa;
+  --app-calm: #3f5f86;
+  --app-warning: #c47a2c;
+  --app-danger: #c24b4b;
+  --app-danger-soft: #f9dddd;
+  --app-success: #0e7490;
+  --app-success-soft: #dff5fa;
+  --app-shadow: 0 18px 45px rgba(19, 33, 38, 0.1);
+  --app-shadow-sm: 0 8px 24px rgba(19, 33, 38, 0.08);
 
   color-scheme: light;
-  color: #000000;
-  background-color: #f5f5f5;
-
+  color: var(--app-ink);
+  background: var(--app-bg);
+  font-family:
+    Aptos, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   font-synthesis: none;
+  line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 * {
-  font-family: "Segoe UI", Arial, sans-serif;
+  box-sizing: border-box;
 }
 
-.dark {
-  --background: 222 47% 4%;
-  --foreground: 213 31% 91%;
-
-  --select-bg: 220 9% 26%;
-
-  --input: 220 23% 16%; /* Dark background (gray-800) */
-  --input-foreground: 0 0% 100%; /* White text */
-  --input-border: 215 19% 27%; /* Dark border (gray-700) */
-  --menuCard: 276, 100%, 50%;
-  --card: 222 47% 8%;
-
-  --border: 217 33% 20%;
-}
-
-a {
-  font-weight: 500;
-  color: #000000;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #000000;
+html {
+  min-height: 100%;
+  background: var(--app-bg);
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
+  margin: 0;
   overflow: hidden;
-  background-color: #f5f5f5;
-  color: #000000;
+  background:
+    radial-gradient(circle at top left, rgba(14, 116, 144, 0.1), transparent 34rem),
+    linear-gradient(180deg, #fbfcfb 0%, var(--app-bg) 34rem);
+  color: var(--app-ink);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+  cursor: wait;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--app-accent-soft);
+  color: var(--app-ink);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .neve-scroll-area {
   box-sizing: border-box;
-  height: calc(100vh - 86px);
-  overflow-y: auto;
+  height: calc(100vh - 78px);
   overflow-x: hidden;
-  padding-top: 1rem;
-  padding-bottom: 2.5rem;
-  scrollbar-color: #111111 #e5e5e5;
+  overflow-y: auto;
+  padding: 1.25rem 0 2.5rem;
+  scrollbar-color: var(--app-border-strong) transparent;
   scrollbar-width: thin;
 }
 
@@ -83,44 +109,35 @@ body {
 }
 
 .neve-scroll-area::-webkit-scrollbar-track {
-  background: #e5e5e5;
-  border-radius: 999px;
+  background: transparent;
 }
 
 .neve-scroll-area::-webkit-scrollbar-thumb {
-  background: #111111;
-  border: 2px solid #e5e5e5;
+  background: var(--app-border-strong);
+  border: 3px solid transparent;
   border-radius: 999px;
+  background-clip: content-box;
 }
 
 .neve-scroll-area::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--app-muted);
+  background-clip: content-box;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
-button {
-  border-radius: 6px;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  background-color: transparent;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #f5f5f5;
+@media (max-width: 767px) {
+  body {
+    overflow: auto;
   }
-  a:hover {
-    color: #000000;
-  }
-  button {
-    background-color: transparent;
+
+  .neve-scroll-area {
+    height: auto;
+    min-height: calc(100vh - 74px);
   }
 }

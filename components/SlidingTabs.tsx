@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import {
   ChartLine,
   ChevronDown,
-  ChevronUp,
   ExternalLink,
   ImageIcon,
   Images,
@@ -132,7 +131,7 @@ const KNOWN_BRANDS = new Set([
 ]);
 const navigationTabs = [
   { label: "Produtos", icon: Package },
-  { label: "Design", icon: Images },
+  { label: "Vitrine", icon: Images },
 ];
 type SortOrder = "price_asc" | "price_desc" | "stores_desc";
 type StoreRankingState = {
@@ -494,10 +493,7 @@ const splitRowsByBrand = (rows: ComparisonRow[]) =>
       .filter((brandRow): brandRow is ComparisonRow => Boolean(brandRow));
   });
 
-const rowToneClass = (row: ComparisonRow) =>
-  Math.abs(row.difference_value) < 100
-    ? "bg-emerald-700 hover:bg-emerald-800"
-    : "bg-red-600 hover:bg-red-700";
+const rowToneClass = () => "bg-[#1f8a5f] hover:bg-[#18724f]";
 
 const buildRowFromOffers = (
   offers: Product[],
@@ -594,13 +590,13 @@ const sortProducts = (products: Product[], sortOrder: SortOrder) => {
 
 const TableHeader = () => (
   <thead>
-    <tr className="bg-neutral-200 text-left text-sm font-semibold text-neutral-800">
+    <tr className="bg-[var(--app-surface-strong)] text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-muted)]">
       <th className="w-[11%] px-6 py-4">Marca</th>
       <th className="w-[37%] px-5 py-4">Produto</th>
       <th className="w-[11%] px-5 py-4 text-center">Lojas</th>
       <th className="w-[17%] px-5 py-4 text-center">Preço sugerido</th>
       <th className="w-[16%] px-5 py-4 text-center">Mais barato</th>
-      <th className="sticky right-0 z-20 w-[72px] bg-neutral-200 px-4 py-4" />
+      <th className="sticky right-0 z-20 w-[72px] bg-[var(--app-surface-strong)] px-4 py-4" />
     </tr>
   </thead>
 );
@@ -622,23 +618,23 @@ const StoreRankingPreview = ({
 
   return (
     <div
-      className="pointer-events-none fixed z-50 w-[410px] overflow-hidden rounded-sm border border-neutral-200 bg-white text-left shadow-[0_18px_38px_rgba(0,0,0,0.18)]"
+      className="pointer-events-none fixed z-50 w-[410px] overflow-hidden rounded-md border border-[var(--app-border)] bg-white text-left shadow-[var(--app-shadow)]"
       style={{ left, top, transform: "translateX(-50%)" }}
     >
       {topOffers.map((offer, index) => (
         <div
           key={`${offer.store}-${offer.url}-${index}`}
           className={`grid grid-cols-[54px_1fr_92px] items-center gap-3 px-4 py-2.5 text-xs ${
-            index % 2 === 0 ? "bg-white" : "bg-neutral-50"
-          } ${index > 0 ? "border-t border-neutral-200" : ""}`}
+            index % 2 === 0 ? "bg-white" : "bg-[var(--app-surface-soft)]"
+          } ${index > 0 ? "border-t border-[var(--app-border)]" : ""}`}
         >
-          <span className="text-center font-semibold text-sky-900">
+          <span className="text-center font-semibold text-[var(--app-calm)]">
             {index + 1}º
           </span>
-          <span className="min-w-0 truncate font-normal text-sky-900">
+          <span className="min-w-0 truncate font-medium text-[var(--app-ink)]">
             {offer.store}
           </span>
-          <span className="rounded bg-neutral-500 px-3 py-1 text-center font-normal text-white">
+          <span className="rounded-md bg-[var(--app-accent)] px-3 py-1 text-center font-semibold text-white">
             {formatRankingPrice(offer.current_price)}
           </span>
         </div>
@@ -648,11 +644,11 @@ const StoreRankingPreview = ({
 };
 
 const DashboardPriceTable = ({ row }: { row: ComparisonRow }) => (
-  <div className="mt-5 overflow-hidden rounded-md border border-neutral-200 bg-white">
+  <div className="mt-5 overflow-hidden rounded-md border border-[var(--app-border)] bg-white">
     <div className="w-full overflow-x-auto">
       <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left">
         <thead>
-          <tr className="bg-neutral-200 text-xs font-semibold text-neutral-800">
+          <tr className="bg-[var(--app-surface-strong)] text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-muted)]">
             <th className="w-[12%] px-4 py-3">Material</th>
             <th className="w-[22%] px-4 py-3">Descrição</th>
             {DASHBOARD_PRICE_COLUMNS.map((column) => (
@@ -663,11 +659,11 @@ const DashboardPriceTable = ({ row }: { row: ComparisonRow }) => (
           </tr>
         </thead>
         <tbody>
-          <tr className="bg-white text-xs text-neutral-700">
-            <td className="px-4 py-4 font-semibold text-neutral-900">
+          <tr className="bg-white text-xs text-[var(--app-muted)]">
+            <td className="px-4 py-4 font-semibold text-[var(--app-ink)]">
               {getRowSku(row)}
             </td>
-            <td className="px-4 py-4 text-neutral-800">
+            <td className="px-4 py-4 text-[var(--app-muted)]">
               {getDashboardDescription(row)}
             </td>
             {DASHBOARD_PRICE_COLUMNS.map((column) => {
@@ -676,9 +672,17 @@ const DashboardPriceTable = ({ row }: { row: ComparisonRow }) => (
               return (
                 <td
                   key={column.label}
-                  className="whitespace-nowrap px-3 py-4 text-center font-semibold text-neutral-800"
+                  className="whitespace-nowrap px-3 py-4 text-center align-middle font-semibold text-[var(--app-ink)]"
                 >
-                  {price === null ? "-" : formatCurrency(price)}
+                  <span className="flex min-h-5 w-full items-center justify-center text-center tabular-nums">
+                    {price === null ? (
+                      <span className="inline-block w-4 text-center text-[var(--app-subtle)]">
+                        -
+                      </span>
+                    ) : (
+                      formatCurrency(price)
+                    )}
+                  </span>
                 </td>
               );
             })}
@@ -693,11 +697,42 @@ const LoadMoreButton = ({ onClick }: { onClick: () => void }) => (
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-300 !bg-white px-6 py-3 text-sm font-bold text-black shadow-[0_8px_22px_rgba(0,0,0,0.08)] transition-all hover:!bg-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.12)]"
+    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[var(--app-border)] bg-white px-6 py-3 text-sm font-semibold text-[var(--app-ink)] shadow-[var(--app-shadow-sm)] transition-all hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)]"
   >
     <span>Carregar mais</span>
     <ChevronDown size={17} strokeWidth={2.4} />
   </button>
+);
+
+const FilterChevron = ({ expanded }: { expanded: boolean }) => (
+  <ChevronDown
+    size={17}
+    className={`text-[var(--app-muted)] transition-transform duration-200 ease-out ${
+      expanded ? "rotate-180" : "rotate-0"
+    }`}
+  />
+);
+
+const FilterPanel = ({
+  expanded,
+  children,
+}: {
+  expanded: boolean;
+  children: ReactNode;
+}) => (
+  <div
+    className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+      expanded
+        ? "grid-rows-[1fr] opacity-100"
+        : "pointer-events-none grid-rows-[0fr] opacity-0"
+    }`}
+  >
+    <div className="min-h-0 overflow-hidden">
+      <div className="mt-2 overflow-hidden rounded-md bg-white">
+        {children}
+      </div>
+    </div>
+  </div>
 );
 
 export default function SlidingTabs({
@@ -821,7 +856,7 @@ export default function SlidingTabs({
     ? "Pesquisando..."
     : products.length > 0 || rows.length > 0
       ? "Nenhum produto disponível para os filtros selecionados."
-      : "Pesquise um produto para preencher a lista.";
+      : "Nenhum produto disponível.";
 
   const toggleBrandFilter = (brand: string) => {
     setSelectedBrands((current) =>
@@ -879,124 +914,116 @@ export default function SlidingTabs({
 
   return (
     <div className="w-full">
-      <div className="flex w-full items-start gap-6 pl-5 text-left">
-        <aside className="w-72 shrink-0 px-1">
-          <div className="h-8 px-3 pb-3" />
+      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-[270px_minmax(0,1fr)] items-start gap-6 px-6 text-left max-lg:grid-cols-1 max-md:px-4">
+        <aside className="sticky top-0 z-20 w-[270px] shrink-0 rounded-md border border-[var(--app-border)] bg-white/82 p-4 shadow-[var(--app-shadow-sm)] backdrop-blur max-lg:static max-lg:w-full">
+          <div className="mb-4 border-b border-[var(--app-border)] pb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-subtle)]">
+              Filtros
+            </p>
+          </div>
 
-          <div className="space-y-3 px-3">
+          <div className="space-y-4">
             <section>
               <button
                 type="button"
                 onClick={() => toggleFilterSection("brands")}
-                className="flex w-full items-center justify-between border-0 !bg-transparent p-0 text-left hover:!bg-transparent"
+                className="flex w-full items-center justify-between border-0 bg-transparent p-0 text-left"
                 aria-expanded={expandedFilters.brands}
               >
-                <h3 className="text-sm font-bold text-black">Marcas</h3>
-                {expandedFilters.brands ? (
-                  <ChevronUp size={17} className="text-neutral-600" />
-                ) : (
-                  <ChevronDown size={17} className="text-neutral-600" />
-                )}
+                <h3 className="text-sm font-semibold text-[var(--app-ink)]">Marcas</h3>
+                <FilterChevron expanded={expandedFilters.brands} />
               </button>
-              {expandedFilters.brands && (
-                <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-                  {BRAND_FILTERS.map((brand, index) => (
-                    <button
-                      key={brand}
-                      type="button"
-                      onClick={() => toggleBrandFilter(brand)}
-                      className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-1 text-left font-normal text-black transition-colors hover:!bg-neutral-50 ${
-                        index > 0 ? "border-t border-neutral-100" : ""
+
+              <FilterPanel expanded={expandedFilters.brands}>
+                {BRAND_FILTERS.map((brand, index) => (
+                  <button
+                    key={brand}
+                    type="button"
+                    onClick={() => toggleBrandFilter(brand)}
+                    className={`flex w-full items-center justify-between gap-3 bg-transparent px-4 py-2 text-left text-[13px] font-medium leading-[18px] text-[var(--app-ink)] transition-colors hover:bg-white ${
+                      index > 0 ? "border-t border-[var(--app-border)]" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 truncate pb-px">{brand}</span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        selectedBrands.includes(brand)
+                          ? "bg-[var(--app-accent)]"
+                          : "bg-[var(--app-border-strong)]"
                       }`}
-                      style={{ fontSize: "13px", lineHeight: "18px" }}
                     >
-                      <span className="min-w-0 truncate pb-px">{brand}</span>
                       <span
-                        className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        className={`h-5 w-5 rounded bg-white shadow-sm transition-transform ${
                           selectedBrands.includes(brand)
-                            ? "bg-black"
-                            : "bg-neutral-300"
+                            ? "translate-x-5"
+                            : "translate-x-0"
                         }`}
-                      >
-                        <span
-                          className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
-                            selectedBrands.includes(brand)
-                              ? "translate-x-5"
-                              : "translate-x-0"
-                          }`}
-                        />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                      />
+                    </span>
+                  </button>
+                ))}
+              </FilterPanel>
             </section>
 
             <section>
               <button
                 type="button"
                 onClick={() => toggleFilterSection("stores")}
-                className="flex w-full items-center justify-between border-0 !bg-transparent p-0 text-left hover:!bg-transparent"
+                className="flex w-full items-center justify-between border-0 bg-transparent p-0 text-left"
                 aria-expanded={expandedFilters.stores}
               >
-                <h3 className="text-sm font-bold text-black">Lojas</h3>
-                {expandedFilters.stores ? (
-                  <ChevronUp size={17} className="text-neutral-600" />
-                ) : (
-                  <ChevronDown size={17} className="text-neutral-600" />
-                )}
+                <h3 className="text-sm font-semibold text-[var(--app-ink)]">Lojas</h3>
+                <FilterChevron expanded={expandedFilters.stores} />
               </button>
-              {expandedFilters.stores && (
-                <div className="mt-1 overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-                  {STORE_FILTERS.map((store, index) => (
-                    <button
-                      key={store.label}
-                      type="button"
-                      onClick={() => toggleStoreFilter(store.label)}
-                      className={`flex w-full items-center justify-between gap-3 !bg-white px-4 py-1 text-left font-normal text-black transition-colors hover:!bg-neutral-50 ${
-                        index > 0 ? "border-t border-neutral-100" : ""
+
+              <FilterPanel expanded={expandedFilters.stores}>
+                {STORE_FILTERS.map((store, index) => (
+                  <button
+                    key={store.label}
+                    type="button"
+                    onClick={() => toggleStoreFilter(store.label)}
+                    className={`flex w-full items-center justify-between gap-3 bg-transparent px-4 py-2 text-left text-[13px] font-medium leading-[18px] text-[var(--app-ink)] transition-colors hover:bg-white ${
+                      index > 0 ? "border-t border-[var(--app-border)]" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 truncate pb-px">
+                      {store.label}
+                    </span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        selectedStores.includes(store.label)
+                          ? "bg-[var(--app-accent)]"
+                          : "bg-[var(--app-border-strong)]"
                       }`}
-                      style={{ fontSize: "13px", lineHeight: "18px" }}
                     >
-                      <span className="min-w-0 truncate pb-px">
-                        {store.label}
-                      </span>
                       <span
-                        className={`flex h-6 w-11 items-center rounded-md p-0.5 transition-colors ${
+                        className={`h-5 w-5 rounded bg-white shadow-sm transition-transform ${
                           selectedStores.includes(store.label)
-                            ? "bg-black"
-                            : "bg-neutral-300"
+                            ? "translate-x-5"
+                            : "translate-x-0"
                         }`}
-                      >
-                        <span
-                          className={`h-5 w-5 rounded-sm bg-white shadow-sm transition-transform ${
-                            selectedStores.includes(store.label)
-                              ? "translate-x-5"
-                              : "translate-x-0"
-                          }`}
-                        />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                      />
+                    </span>
+                  </button>
+                ))}
+              </FilterPanel>
             </section>
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1 pr-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-normal text-neutral-700">
-              <span className="font-semibold text-black">Mostrando:</span>
+        <div className="min-w-0 flex-1">
+          <div className="relative z-40 mb-5 flex flex-wrap items-center justify-between gap-4 rounded-md border border-[var(--app-border)] bg-white/82 px-4 py-3 shadow-[var(--app-shadow-sm)] backdrop-blur">
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-[var(--app-muted)]">
+              <span className="font-semibold text-[var(--app-ink)]">Mostrando:</span>
               <span className="inline-flex items-center gap-1.5">
-                <Tag size={16} strokeWidth={2.2} className="text-neutral-700" />
+                <Tag size={16} strokeWidth={2.2} className="text-[var(--app-accent)]" />
                 <span>{displayedOfferCount} ofertas</span>
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Package
                   size={16}
                   strokeWidth={2.2}
-                  className="text-neutral-700"
+                  className="text-[var(--app-calm)]"
                 />
                 <span>{displayedProductCount} produtos</span>
               </span>
@@ -1007,46 +1034,34 @@ export default function SlidingTabs({
                 <button
                   type="button"
                   onClick={() => setSortOpen((current) => !current)}
-                  className="inline-flex h-6 flex-none items-center justify-end gap-1 overflow-visible whitespace-nowrap border-0 !bg-transparent px-0 py-0 font-normal text-black hover:!bg-transparent"
+                  className="inline-flex h-9 flex-none items-center justify-end gap-1 overflow-visible whitespace-nowrap rounded-md border border-[var(--app-border)] bg-white px-3 py-0 text-[13px] font-medium leading-none text-[var(--app-ink)] transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)]"
                   aria-expanded={sortOpen}
-                  style={{
-                    fontSize: "14px",
-                    lineHeight: 1,
-                    whiteSpace: "nowrap",
-                    wordBreak: "keep-all",
-                  }}
                 >
                   <span
                     className="inline-block whitespace-nowrap leading-none"
-                    style={{ whiteSpace: "nowrap", wordBreak: "keep-all" }}
                   >
                     {sortLabel}
                   </span>
-                  {sortOpen ? (
-                    <ChevronUp size={13} className="shrink-0 text-blue-500" />
-                  ) : (
-                    <ChevronDown size={13} className="shrink-0 text-blue-500" />
-                  )}
+                  <ChevronDown
+                    size={13}
+                    className={`shrink-0 text-[var(--app-accent)] transition-transform duration-200 ease-out ${
+                      sortOpen ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
                 </button>
 
                 {sortOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-[168px] overflow-hidden rounded-md border border-neutral-200 !bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+                  <div className="absolute right-0 top-full z-[80] mt-2 w-[168px] overflow-hidden rounded-md border border-[var(--app-border)] bg-white shadow-[var(--app-shadow)]">
                     {SORT_OPTIONS.map((option) => (
                       <button
                         key={option.value}
                         type="button"
                         onClick={() => selectSortOrder(option.value)}
-                        className={`flex w-full items-center justify-between whitespace-nowrap px-2.5 py-1 text-left transition-colors hover:!bg-neutral-100 ${
+                        className={`flex w-full items-center justify-between whitespace-nowrap px-2.5 py-1 text-left text-[14px] leading-[1.2] transition-colors hover:bg-[var(--app-surface-soft)] ${
                           sortOrder === option.value
-                            ? "!bg-neutral-100 font-semibold text-black"
-                            : "!bg-white font-normal text-neutral-700"
+                            ? "bg-[var(--app-accent-soft)] font-semibold text-[var(--app-ink)]"
+                            : "bg-white font-medium text-[var(--app-muted)]"
                         }`}
-                        style={{
-                          fontSize: "14px",
-                          lineHeight: 1.2,
-                          whiteSpace: "nowrap",
-                          wordBreak: "keep-all",
-                        }}
                       >
                         <span className="whitespace-nowrap">
                           {option.label}
@@ -1066,10 +1081,10 @@ export default function SlidingTabs({
                       key={tab.label}
                       type="button"
                       onClick={() => onTabChange(index)}
-                      className={`flex h-10 items-center gap-2 border border-transparent px-4 py-0 text-[14px] font-semibold transition-colors ${
+                      className={`flex h-10 items-center gap-2 rounded-md border px-4 py-0 text-[14px] font-semibold transition-colors ${
                         activeTab === index
-                          ? "border-neutral-200 !bg-white text-black shadow-sm"
-                          : "bg-transparent text-neutral-600 hover:bg-white hover:text-black"
+                          ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-white shadow-sm"
+                          : "border-[var(--app-border)] bg-white text-[var(--app-muted)] hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)] hover:text-[var(--app-ink)]"
                       }`}
                     >
                       <Icon size={18} strokeWidth={2.4} className="shrink-0" />
@@ -1084,14 +1099,14 @@ export default function SlidingTabs({
           {activeTab === 0 && (
             <div className="animate-fade-in">
               {dashboardRow ? (
-                <div className="w-full rounded-md border border-slate-200 bg-white p-5 text-slate-900">
+                <div className="w-full rounded-md border border-[var(--app-border)] bg-white p-5 text-[var(--app-ink)] shadow-[var(--app-shadow-sm)]">
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-subtle)]">
                         Dashboard
                       </p>
                       <h3
-                        className="truncate text-base font-semibold text-black"
+                        className="truncate text-base font-semibold text-[var(--app-ink)]"
                         title={dashboardRow.name}
                       >
                         {dashboardRow.name}
@@ -1101,12 +1116,7 @@ export default function SlidingTabs({
                       type="button"
                       aria-label="Voltar para lista"
                       onClick={() => setDashboardRow(null)}
-                      className="shrink-0 border-0 !bg-transparent p-0 text-sm font-semibold text-black transition-colors hover:!bg-transparent hover:text-neutral-600"
-                      style={{
-                        background: "transparent",
-                        border: 0,
-                        padding: 0,
-                      }}
+                      className="shrink-0 rounded-md border border-[var(--app-border)] bg-white px-3 py-2 text-sm font-semibold leading-none text-[var(--app-ink)] transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)]"
                     >
                       Voltar
                     </button>
@@ -1116,7 +1126,7 @@ export default function SlidingTabs({
                 </div>
               ) : (
                 <>
-                <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-slate-900">
+                <div className="w-full overflow-hidden rounded-md border border-[var(--app-border)] bg-white text-[var(--app-ink)] shadow-[var(--app-shadow-sm)]">
                   <div className="w-full overflow-x-auto">
                     <table className="w-full min-w-[1240px] table-fixed border-separate border-spacing-0">
                       <TableHeader />
@@ -1126,17 +1136,17 @@ export default function SlidingTabs({
                             <tr
                               key={`${row.id}-${row.name}`}
                               className={
-                                index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                index % 2 === 0 ? "bg-white" : "bg-[#f6f7f8]"
                               }
                             >
                               <td className="px-6 py-4 text-left align-middle">
-                                <span className="inline-flex rounded-sm bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                                <span className="inline-flex rounded-md bg-[#eceff1] px-2.5 py-1 text-xs font-semibold text-[#56646b]">
                                   {getProductBrand(row)}
                                 </span>
                               </td>
                               <td className="px-5 py-4 text-left align-middle">
                                 <p
-                                  className="min-w-0 max-w-[580px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-normal leading-snug text-slate-800"
+                                  className="min-w-0 max-w-[580px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-snug text-[var(--app-ink)]"
                                   title={row.name}
                                 >
                                   {truncateText(row.name)}
@@ -1150,19 +1160,19 @@ export default function SlidingTabs({
                                   }
                                   onMouseLeave={hideStoreRanking}
                                 >
-                                  <div className="inline-flex min-w-[92px] items-center justify-center gap-2 text-sm font-black text-slate-800">
+                                  <div className="inline-flex min-w-[92px] items-center justify-center gap-2 text-sm font-semibold text-[var(--app-ink)]">
                                     <span>{row.store_count}</span>
                                     <ShoppingBag
                                       size={16}
-                                      className="text-slate-500"
+                                      className="text-[var(--app-muted)]"
                                     />
                                   </div>
-                                  <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-slate-500">
+                                  <p className="mt-1 whitespace-nowrap text-[11px] font-medium text-[var(--app-subtle)]">
                                     {row.store_count} lojas
                                   </p>
                                 </div>
                               </td>
-                              <td className="whitespace-nowrap px-5 py-4 text-center align-middle text-sm font-normal text-slate-700">
+                              <td className="whitespace-nowrap px-5 py-4 text-center align-middle text-sm font-medium text-[var(--app-muted)]">
                                 {formatCurrency(row.pma)}
                               </td>
                               <td className="px-5 py-4 text-center align-middle">
@@ -1170,7 +1180,7 @@ export default function SlidingTabs({
                                   href={row.cheapest_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`inline-flex min-w-[128px] items-center justify-center gap-2 rounded px-3 py-2 text-sm font-black leading-none !text-white ${rowToneClass(row)}`}
+                                  className={`inline-flex min-w-[128px] items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold leading-none !text-white transition-colors ${rowToneClass()}`}
                                 >
                                   {formatCurrency(row.cheapest_price)}
                                   <ExternalLink
@@ -1178,25 +1188,20 @@ export default function SlidingTabs({
                                     className="shrink-0 text-white"
                                   />
                                 </a>
-                                <p className="mx-auto mt-1 max-w-[160px] truncate text-center text-[11px] font-semibold text-slate-500">
+                                <p className="mx-auto mt-1 max-w-[160px] truncate text-center text-[11px] font-medium text-[var(--app-subtle)]">
                                   {row.cheapest_store}
                                 </p>
                               </td>
                               <td
                                 className={`sticky right-0 z-10 w-[72px] px-4 py-4 text-center align-middle ${
-                                  index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                  index % 2 === 0 ? "bg-white" : "bg-[#f6f7f8]"
                                 }`}
                               >
                                 <button
                                   type="button"
                                   aria-label="Abrir dashboard do item"
                                   onClick={() => setDashboardRow(row)}
-                                  className="mx-auto flex h-10 w-10 items-center justify-center border-0 !bg-transparent p-0 text-neutral-700 opacity-100 transition-colors hover:!bg-transparent hover:text-neutral-900"
-                                  style={{
-                                    background: "transparent",
-                                    border: 0,
-                                    padding: 0,
-                                  }}
+                                  className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-[var(--app-border)] bg-white p-0 leading-none text-[var(--app-muted)] opacity-100 transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)] hover:text-[var(--app-ink)]"
                                 >
                                   <ChartLine
                                     size={22}
@@ -1211,7 +1216,7 @@ export default function SlidingTabs({
                           <tr className="bg-white">
                             <td
                               colSpan={6}
-                              className="h-[360px] px-6 py-4 text-center align-middle text-base font-semibold text-black"
+                              className="h-[360px] px-6 py-4 text-center align-middle text-base font-semibold text-[var(--app-muted)]"
                             >
                               {tableMessage}
                             </td>
@@ -1244,34 +1249,34 @@ export default function SlidingTabs({
                   {visibleProducts.map((product) => (
                     <article
                       key={`${product.id}-${product.url}`}
-                      className="group flex min-h-[430px] min-w-0 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white text-left text-black shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-shadow hover:shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
+                      className="group flex min-h-[430px] min-w-0 flex-col overflow-hidden rounded-md border border-[var(--app-border)] bg-white text-left text-[var(--app-ink)] shadow-[var(--app-shadow-sm)] transition-all hover:-translate-y-0.5 hover:border-[var(--app-border-strong)] hover:shadow-[var(--app-shadow)]"
                     >
-                      <div className="flex h-[270px] shrink-0 items-center justify-center bg-neutral-50 px-5 py-5">
+                      <div className="flex h-[270px] shrink-0 items-center justify-center bg-[#f1f2f4] px-5 py-5">
                         {product.image_url ? (
                           <img
                             src={product.image_url}
                             alt={product.name}
-                            className="max-h-full max-w-full object-contain"
+                            className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
                             loading="lazy"
                           />
                         ) : (
-                          <ImageIcon size={34} className="text-black" />
+                          <ImageIcon size={34} className="text-[var(--app-subtle)]" />
                         )}
                       </div>
 
-                      <div className="flex min-h-[160px] flex-col justify-between border-t border-neutral-100 bg-white px-4 py-4">
-                        <h3 className="line-clamp-2 min-h-10 break-words text-[13px] font-normal leading-snug text-black">
+                      <div className="flex min-h-[160px] flex-col justify-between border-t border-[var(--app-border)] bg-white px-4 py-4">
+                        <h3 className="line-clamp-2 min-h-10 break-words text-[13px] font-medium leading-snug text-[var(--app-ink)]">
                           {product.name}
                         </h3>
                         <div className="mt-3 flex min-w-0 items-end justify-between gap-3">
-                          <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[25px] font-normal leading-none text-black tabular-nums">
+                          <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[25px] font-semibold leading-none text-[var(--app-accent-strong)] tabular-nums">
                             {formatCardCurrency(product.current_price)}
                           </p>
                           <a
                             href={product.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-neutral-200 !bg-white px-3 text-[11px] font-semibold text-black transition-colors hover:!bg-neutral-100"
+                            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[var(--app-border)] bg-white px-3 text-[11px] font-semibold text-[var(--app-ink)] transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)]"
                           >
                             <span>Acessar produto</span>
                             <ExternalLink size={13} className="shrink-0" />
@@ -1293,7 +1298,7 @@ export default function SlidingTabs({
                 )}
               </>
             ) : (
-              <div className="p-8 text-center text-black">
+              <div className="rounded-md border border-[var(--app-border)] bg-white p-8 text-center font-semibold text-[var(--app-muted)] shadow-[var(--app-shadow-sm)]">
                 Nenhum produto disponível.
               </div>
             )}
