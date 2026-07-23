@@ -23,6 +23,7 @@ const useHeroSection = () => {
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [lastQuery, setLastQuery] = useState("");
 
   const handleSearch = async () => {
     if (loading) return;
@@ -32,10 +33,9 @@ const useHeroSection = () => {
 
     setLoading(true);
     setFeedback("");
+    setLastQuery(query);
 
     const apiBase = getApiBaseUrl();
-
-    console.log("Conectando em:", apiBase);
 
     try {
       const response = await fetch(
@@ -50,7 +50,6 @@ const useHeroSection = () => {
       const receivedStores = data.stores || [];
       const receivedComparison = data.comparison || [];
 
-      console.log("Produtos recebidos:", receivedProducts);
       setProducts(receivedProducts);
       setStoreResults(receivedStores);
       setComparisonRows(receivedComparison);
@@ -73,6 +72,7 @@ const useHeroSection = () => {
     comparisonRows,
     loading,
     feedback,
+    lastQuery,
     setProductName,
     handleSearch,
   };

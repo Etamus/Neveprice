@@ -1,7 +1,7 @@
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,110 +16,88 @@ interface PriceChartProps {
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+const preciseCurrencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const formatCurrency = (value: number) => currencyFormatter.format(value || 0);
-
-const chartColors = {
-  accent: "#0e7490",
-  accentStrong: "#155e75",
-  border: "#d4e3e8",
-  ink: "#132126",
-  muted: "#5e7178",
-  surface: "#ffffff",
-};
+const shortStore = (value: string) =>
+  value.length > 13 ? `${value.slice(0, 12)}…` : value;
 
 export const PriceChart = ({ products }: PriceChartProps) => {
   const cheapestByStore = new Map<string, { store: string; price: number }>();
 
-  products
-    .filter((product) => product.current_price && !isNaN(Number(product.current_price)))
-    .forEach((product) => {
-      const price = Number(product.current_price);
-      const current = cheapestByStore.get(product.store);
+  products.forEach((product) => {
+    const price = Number(product.current_price);
+    if (!Number.isFinite(price) || price <= 0) return;
 
-      if (!current || price < current.price) {
-        cheapestByStore.set(product.store, {
-          store: product.store,
-          price,
-        });
-      }
-    });
+    const current = cheapestByStore.get(product.store);
+    if (!current || price < current.price) {
+      cheapestByStore.set(product.store, { store: product.store, price });
+    }
+  });
 
-  const chartData = Array.from(cheapestByStore.values()).sort(
-    (a, b) => a.price - b.price,
-  );
+  const chartData = [...cheapestByStore.values()].sort((a, b) => a.price - b.price);
 
-  if (chartData.length === 0) {
-    return null;
-  }
+  if (!chartData.length) return null;
 
   return (
-    <div className="h-[430px] w-full overflow-hidden rounded-md border border-[var(--app-border)] bg-[var(--app-surface-soft)] px-3 py-4">
+    <div className="h-[320px] min-h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={chartData}
-          margin={{ top: 18, right: 26, left: 16, bottom: 88 }}
-        >
-          <CartesianGrid
-            stroke={chartColors.border}
-            strokeDasharray="4 4"
-            vertical={false}
-          />
+        <AreaChart data={chartData} margin={{ top: 12, right: 14, left: 4, bottom: 18 }}>
+          <CartesianGrid stroke="#e8ebef" vertical={false} strokeDasharray="3 4" />
           <XAxis
             dataKey="store"
             axisLine={false}
             tickLine={false}
-            interval={0}
-            minTickGap={8}
-            angle={-35}
-            textAnchor="end"
-            tick={{ fill: chartColors.ink, fontSize: 11, fontWeight: 600 }}
-            tickMargin={16}
-            height={92}
+            tick={{ fill: "#7c8695", fontSize: 10, fontWeight: 500 }}
+            tickFormatter={shortStore}
+            tickMargin={12}
+            interval="preserveStartEnd"
+            minTickGap={28}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: chartColors.muted, fontSize: 12 }}
-            tickFormatter={(value) => formatCurrency(Number(value))}
-            width={92}
+            tick={{ fill: "#7c8695", fontSize: 10 }}
+            tickFormatter={(value) => currencyFormatter.format(Number(value))}
+            width={78}
+            tickMargin={8}
           />
           <Tooltip
-            cursor={{ stroke: chartColors.muted, strokeDasharray: "4 4" }}
+            cursor={{ stroke: "#a6b0bd", strokeDasharray: "3 4" }}
             contentStyle={{
-              backgroundColor: chartColors.surface,
-              border: `1px solid ${chartColors.border}`,
-              borderRadius: "8px",
-              boxShadow: "0 18px 45px rgba(20,32,29,0.12)",
-              color: chartColors.ink,
+              background: "#111827",
+              border: "none",
+              borderRadius: "7px",
+              boxShadow: "0 12px 28px rgba(15, 23, 42, 0.18)",
+              color: "#fff",
               fontFamily: "inherit",
+              fontSize: "12px",
+              padding: "9px 11px",
             }}
-            formatter={(value) => [formatCurrency(Number(value)), "Preço"]}
-            labelStyle={{ color: chartColors.ink, fontWeight: 700 }}
+            itemStyle={{ color: "#fff", fontWeight: 600 }}
+            labelStyle={{ color: "#aeb8c6", marginBottom: "3px" }}
+            formatter={(value) => [preciseCurrencyFormatter.format(Number(value)), "Preço"]}
           />
-          <Line
-            type="linear"
+          <Area
+            type="monotone"
             dataKey="price"
             name="Preço"
-            stroke={chartColors.accent}
-            strokeWidth={3}
-            dot={{
-              r: 5,
-              strokeWidth: 2,
-              fill: chartColors.surface,
-              stroke: chartColors.accent,
-            }}
-            activeDot={{
-              r: 7,
-              strokeWidth: 2,
-              fill: chartColors.accentStrong,
-              stroke: chartColors.surface,
-            }}
+            stroke="#0f7180"
+            strokeWidth={2.25}
+            fill="#e6f3f5"
+            fillOpacity={0.8}
+            dot={{ r: 3.5, fill: "#ffffff", stroke: "#0f7180", strokeWidth: 2 }}
+            activeDot={{ r: 5, fill: "#0f7180", stroke: "#ffffff", strokeWidth: 2 }}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );

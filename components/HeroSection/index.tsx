@@ -1,46 +1,89 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Search, UserRound } from "lucide-react";
+import {
+  BarChart3,
+  Download,
+  Grid2X2,
+  LogOut,
+  PackageSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Settings,
+  UserRound,
+  X,
+} from "lucide-react";
 import SlidingTabs from "../SlidingTabs";
 import useHeroSection from "./viewModel";
 import logoUrl from "../../static/logo.png";
 
-const AUTH_USERS = [
-  {
-    username: "DEUSM2",
-    password: "1234",
-  },
-];
+const AUTH_USERS = [{ username: "DEUSM2", password: "1234" }];
 const AUTH_STORAGE_KEY = "neveprice-auth-user";
+
+const navigation = [
+  { label: "Ofertas", description: "Comparação de preços", icon: PackageSearch },
+  { label: "Catálogo", description: "Visualização em grade", icon: Grid2X2 },
+  { label: "Analytics", description: "Leitura de mercado", icon: BarChart3 },
+];
 
 export const HeroSection = () => {
   const [activeTab, setActiveTab] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [loginUser, setLoginUser] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const accountRef = useRef<HTMLDivElement>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
     const storedUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
-    const knownUser = AUTH_USERS.find((user) => user.username === storedUser);
-
-    return knownUser?.username || null;
+    return AUTH_USERS.find((user) => user.username === storedUser)?.username || null;
   });
   const {
     productName,
     products,
     comparisonRows,
     loading,
+    lastQuery,
     setProductName,
     handleSearch,
   } = useHeroSection();
 
-  const submitSearch = () => {
-    if (loading) return;
+  useEffect(() => {
+    const closeMenus = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLoginOpen(false);
+        setAccountOpen(false);
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeMenus);
+    return () => window.removeEventListener("keydown", closeMenus);
+  }, []);
+
+  useEffect(() => {
+    const closeAccountMenu = (event: PointerEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) {
+        setAccountOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeAccountMenu, true);
+    return () => document.removeEventListener("pointerdown", closeAccountMenu, true);
+  }, []);
+
+  const submitSearch = (event?: FormEvent) => {
+    event?.preventDefault();
+    if (loading || !productName.trim()) return;
     setActiveTab(0);
+    setSidebarOpen(false);
     handleSearch();
   };
 
   const openLogin = () => {
+    setAccountOpen(false);
     setAuthError("");
     setLoginOpen(true);
   };
@@ -53,7 +96,6 @@ export const HeroSection = () => {
 
   const handleLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const normalizedUser = loginUser.trim().toUpperCase();
     const user = AUTH_USERS.find(
       (candidate) =>
@@ -76,78 +118,192 @@ export const HeroSection = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setAccountOpen(false);
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
   };
 
+  const switchTab = (index: number) => {
+    setActiveTab(index);
+    setSidebarOpen(false);
+  };
+
+  const toggleSidebar = () => {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      setSidebarCollapsed((collapsed) => !collapsed);
+      return;
+    }
+
+    setSidebarOpen((open) => !open);
+  };
+
   return (
-    <section className="relative min-h-screen w-full bg-transparent px-0 pt-[78px] text-[var(--app-ink)] max-md:pt-[74px]">
-      <nav className="fixed inset-x-0 top-0 z-30 border-b border-[var(--app-border)] bg-white/90 text-[var(--app-ink)] shadow-[var(--app-shadow-sm)] backdrop-blur-xl">
-        <div className="relative mx-auto min-h-[78px] w-full max-w-[1600px] px-6 max-md:min-h-[74px] max-md:px-4">
-          <div className="absolute left-6 top-1/2 flex -translate-y-1/2 items-center max-md:left-4">
-            <img
-              src={logoUrl}
-              alt="NevePrice"
-              className="h-9 w-auto object-contain max-sm:h-7"
-            />
-          </div>
+    <div className={`app-shell ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px] lg:hidden"
+          aria-label="Fechar navegação"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-          <div className="absolute left-1/2 top-1/2 flex w-[min(860px,calc(100vw-360px))] -translate-x-1/2 -translate-y-1/2 justify-center max-lg:w-[min(720px,calc(100vw-300px))] max-md:w-[calc(100vw-144px)] max-sm:w-[calc(100vw-126px)]">
-            <div className="flex h-12 w-full max-w-[860px] items-center overflow-hidden rounded-md border border-[#d7dce0] bg-[#f3f4f6] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors focus-within:border-[#aeb7bd] focus-within:bg-white max-sm:h-11">
-              <input
-                type="text"
-                placeholder="Digite o produto que deseja analisar"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submitSearch()}
-                disabled={loading}
-                className="min-w-0 flex-1 bg-transparent px-4 py-2 text-[14px] font-medium text-[var(--app-ink)] placeholder-[var(--app-subtle)] outline-none disabled:opacity-70 max-sm:px-3"
-              />
-              <button
-                type="button"
-                onClick={submitSearch}
-                disabled={loading}
-                aria-label="Buscar"
-                className="m-1 flex h-10 w-12 shrink-0 items-center justify-center rounded-md border-0 bg-[var(--app-accent-strong)] p-0 text-white transition-colors hover:bg-[var(--app-accent)] disabled:opacity-55 max-sm:h-9 max-sm:w-10"
-              >
-                <Search size={20} strokeWidth={2.4} />
-              </button>
-            </div>
-          </div>
+      <aside className={`app-sidebar ${sidebarOpen ? "app-sidebar--open" : ""}`}>
+        <div className="flex h-16 items-center justify-center border-b border-[var(--border)] px-5">
+          <img src={logoUrl} alt="NevePrice" className="h-8 w-auto" />
+        </div>
 
-          <div className="absolute right-6 top-1/2 flex -translate-y-1/2 items-center max-md:right-4">
+        <div className="flex min-h-0 flex-1 flex-col px-3 py-5">
+          <p className="sidebar-label">Workspace</p>
+          <nav className="mt-2 space-y-1" aria-label="Navegação principal">
+            {navigation.map((item, index) => {
+              const Icon = item.icon;
+              const active = activeTab === index;
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => switchTab(index)}
+                  className={`sidebar-item ${active ? "sidebar-item--active" : ""}`}
+                >
+                  <span className="sidebar-item__icon">
+                    <Icon size={18} strokeWidth={2} />
+                  </span>
+                  <span className="min-w-0 text-left">
+                    <span className="block text-[13px] font-semibold leading-5">{item.label}</span>
+                    <span className="block truncate text-xs font-medium text-[var(--muted)]">
+                      {item.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div ref={accountRef} className="account-menu-root mt-auto border-t border-[var(--border)] pt-4">
+            {currentUser && accountOpen && (
+              <div className="account-popover">
+                <button type="button" className="account-popover__item">
+                  <Settings size={15} />
+                  Configurações
+                </button>
+                <button type="button" className="account-popover__item">
+                  <Download size={15} />
+                  Extrações
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="account-popover__item account-popover__item--danger"
+                >
+                  <LogOut size={15} />
+                  Encerrar sessão
+                </button>
+              </div>
+            )}
             <button
               type="button"
-              onClick={currentUser ? handleLogout : openLogin}
-              aria-label={currentUser ? "Sair" : "Login"}
-              className={`flex h-11 items-center justify-center gap-2 rounded-md border border-[var(--app-border)] bg-white px-3 text-sm font-semibold transition-colors hover:border-[var(--app-border-strong)] max-sm:h-10 max-sm:w-10 max-sm:px-0 ${
-                currentUser
-                  ? "text-[var(--app-accent-strong)]"
-                  : "text-[var(--app-muted)] hover:text-[var(--app-ink)]"
-              }`}
+              onClick={currentUser ? () => setAccountOpen((open) => !open) : openLogin}
+              className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-subtle)]"
             >
-              <UserRound size={22} strokeWidth={2.2} />
-              {currentUser && <span className="max-sm:hidden">{currentUser}</span>}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
+                {currentUser ? currentUser.slice(0, 2) : <UserRound size={17} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-[var(--foreground)]">
+                  {currentUser || "Entrar na conta"}
+                </span>
+                <span className="block truncate text-xs text-[var(--muted)]">
+                  {currentUser ? "Sessão ativa" : "Acesso ao workspace"}
+                </span>
+              </span>
             </button>
           </div>
         </div>
-      </nav>
+      </aside>
+
+      <section className="app-main">
+        <header className="app-header">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              aria-label="Alternar navegação"
+              className="icon-button"
+              onClick={toggleSidebar}
+            >
+              <span className="flex lg:hidden">
+                {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              </span>
+              <span className="hidden lg:flex">
+                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              </span>
+            </button>
+            <div className="hidden items-center gap-2 text-xs md:flex">
+              <span className="font-medium text-[var(--muted)]">Workspace</span>
+              <span className="text-[var(--border-strong)]">/</span>
+              <span className="font-semibold text-[var(--foreground)]">{navigation[activeTab].label}</span>
+            </div>
+          </div>
+
+          <form onSubmit={submitSearch} className="header-search">
+            <input
+              type="search"
+              value={productName}
+              onChange={(event) => setProductName(event.target.value)}
+              placeholder="Buscar produto, modelo ou SKU..."
+              disabled={loading}
+              aria-label="Buscar produtos"
+            />
+            <button
+              type="submit"
+              disabled={loading || !productName.trim()}
+              className="search-submit"
+              aria-label="Buscar"
+            >
+              {loading ? <span className="button-spinner" /> : <Search size={17} />}
+            </button>
+          </form>
+
+          <div aria-hidden="true" />
+        </header>
+
+        <main className="app-content">
+          <SlidingTabs
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            loading={loading}
+            products={products}
+            comparisonRows={comparisonRows}
+            lastQuery={lastQuery}
+          />
+        </main>
+      </section>
 
       {loginOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(19,33,38,0.38)] px-4 backdrop-blur-sm">
+        <div className="dialog-backdrop" role="presentation" onMouseDown={closeLogin}>
           <form
             onSubmit={handleLogin}
-            className="w-full max-w-[360px] rounded-md border border-[var(--app-border)] bg-white p-5 text-left shadow-[var(--app-shadow)]"
+            className="auth-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Acesso"
+            onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-subtle)]">
-                Acesso
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <UserRound size={19} />
+                </span>
+                <h2 className="mt-5 text-lg font-semibold text-[var(--foreground)]">Acesso</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Use suas credenciais para continuar.</p>
+              </div>
+              <button type="button" className="icon-button" onClick={closeLogin} aria-label="Fechar">
+                <X size={17} />
+              </button>
             </div>
 
-            <label className="mb-3 block">
-              <span className="mb-1.5 block text-sm font-semibold text-[var(--app-muted)]">
-                Login
-              </span>
+            <label className="form-field mt-6">
+              <span>Login</span>
               <input
                 type="text"
                 value={loginUser}
@@ -157,14 +313,10 @@ export const HeroSection = () => {
                 }}
                 autoComplete="username"
                 autoFocus
-                className="h-11 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-soft)] px-3 text-sm font-medium text-[var(--app-ink)] outline-none transition-colors focus:border-[var(--app-accent)] focus:bg-white"
               />
             </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-[var(--app-muted)]">
-                Senha
-              </span>
+            <label className="form-field mt-4">
+              <span>Senha</span>
               <input
                 type="password"
                 value={loginPassword}
@@ -173,46 +325,17 @@ export const HeroSection = () => {
                   setAuthError("");
                 }}
                 autoComplete="current-password"
-                className="h-11 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-soft)] px-3 text-sm font-medium text-[var(--app-ink)] outline-none transition-colors focus:border-[var(--app-accent)] focus:bg-white"
               />
             </label>
 
-            {authError && (
-              <p className="mt-3 rounded-md bg-[var(--app-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--app-danger)]">
-                {authError}
-              </p>
-            )}
+            {authError && <p className="auth-error">{authError}</p>}
 
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeLogin}
-                className="h-10 rounded-md border border-[var(--app-border)] bg-white px-4 text-sm font-semibold text-[var(--app-muted)] transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-soft)] hover:text-[var(--app-ink)]"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="h-10 rounded-md border border-[var(--app-accent)] bg-[var(--app-accent)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--app-accent-strong)]"
-              >
-                Entrar
-              </button>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="submit" className="button-primary">Entrar</button>
             </div>
           </form>
         </div>
       )}
-
-      <div className="z-10 w-full">
-        <div className="neve-scroll-area animate-fade-in">
-          <SlidingTabs
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            loading={loading}
-            products={products}
-            comparisonRows={comparisonRows}
-          />
-        </div>
-      </div>
-    </section>
+    </div>
   );
 };

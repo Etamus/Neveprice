@@ -9,6 +9,20 @@ export default defineConfig(({ mode }) => {
   return {
     base: env.VITE_BASE_PATH || "/",
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("victory-vendor")) {
+              return "charts";
+            }
+            if (id.includes("lucide-react")) return "icons";
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       host: "127.0.0.1",
       port: 5173,
